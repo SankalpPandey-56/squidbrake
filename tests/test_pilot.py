@@ -155,27 +155,20 @@ def test_hosted_pilot_lifecycle(insights):
     assert all(p["code"] != code for p in insights.get("/v1/admin/overview", headers=admin).json()["pilots"])
 
 
-def test_connect_all_offers_counts_once_default_no(tmp_path, monkeypatch, capsys):
-    """Installs that aren't pilots can share counts, but only if they say yes when connect all asks: once,
-    default no, never in scripts, and never again after a no."""
+def test_connect_all_never_asks_about_counts(tmp_path, monkeypatch):
+    """Counts aren't a question any more (telemetry.py says once what is sent): connect all, with or without
+    --yes, never prompts for them and never joins a pilot by itself."""
+    from argparse import Namespace
     import connect
     import server
     monkeypatch.setattr(server, "PILOT_DIR", tmp_path)
-    joined = []
-    monkeypatch.setattr(pilot, "_post", lambda srv, path, body: joined.append((srv, body["code"])) or {"company": "Community"})
-
-    monkeypatch.setattr("builtins.input", lambda prompt="": "")                 # just Enter: no
-    connect.offer_counts()
-    assert joined == [] and pilot.load(tmp_path) is None and (tmp_path / "community-asked").exists()
-    assert "Never sent" in capsys.readouterr().out                             # it says what would be sent first
-
-    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("asked twice"))
-    connect.offer_counts()                                                     # a no is remembered
-
-    (tmp_path / "community-asked").unlink()
-    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
-    connect.offer_counts()
-    assert joined == [(connect.COMMUNITY_SERVER, connect.COMMUNITY_CODE)] and pilot.load(tmp_path)["code"] == connect.COMMUNITY_CODE
+    monkeypatch.setattr(pilot, "_post", lambda srv, path, body: pytest.fail("joined a pilot from connect all"))
+    monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("asked about counts"))
+    for f in ("claude_code", "agents", "guard", "_next_step"):
+        monkeypatch.setattr(connect, f, lambda *a, **k: None)
+    monkeypatch.setattr(connect, "_first_keys", lambda url: None)
+    connect.connect_all(Namespace(url="http://localhost:8080", key="gw_x", remove=False, yes=True, only=None))
+    assert pilot.load(tmp_path) is None
 
 
 def test_pilot_server_must_be_https_or_internal(tmp_path):
