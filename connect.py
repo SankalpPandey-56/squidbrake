@@ -979,6 +979,8 @@ def connect_all(args) -> None:
         if not confirm("Continue?", args.yes):
             return
         print()
+    if getattr(args, "mode", None) and not args.remove:
+        set_mode(args.url, args.mode)
     # The first keys are made now and shown at the end, after the agents, where they're easy to find and copy
     created = None if args.remove else _first_keys(args.url)
     each = argparse.Namespace(url=args.url, key=args.key, remove=args.remove, yes=True, agent="all",
@@ -1008,6 +1010,21 @@ def connect_all(args) -> None:
 # Only printed, never opened or sent: the team can't see who installs, so this is how people can find us
 FOUNDER_CALL = "https://calendly.com/pulkitbatra2024/new-meeting-1"
 TEAM_FORM = "https://pilots.squidbrake.com/team"
+
+
+def set_mode(url: str, mode: str) -> None:
+    """`mode: observe | enforce` in this computer's gateway rules.yaml (hot-reloaded). A gateway elsewhere: say how."""
+    if not url.startswith(LOCAL_URLS):
+        print(f"The gateway at {url} isn't on this computer: set `mode: {mode}` in its rules.yaml.")
+        return
+    import server
+    path = server.RULES_PATH
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    line = f"mode: {'shadow' if mode == 'observe' else 'enforce'}"
+    new, n = re.subn(r"(?m)^mode:[ \t]*\S+", line, text)
+    path.write_text(new if n else f"{line}\n{text}", encoding="utf-8")
+    print("Observe mode: nothing is blocked or held; what would have been is recorded (squidbrake report --week)."
+          if mode == "observe" else "Enforce mode: blocks and holds for real.")
 
 
 def _first_keys(url: str) -> dict[str, str] | None:
@@ -1067,6 +1084,9 @@ def main(argv: list[str] | None = None) -> None:
             s.add_argument("--agent", dest="only", action="append", metavar="AGENT",
                            help="only this one (repeat, or comma-separated): claude-code, cursor, codex, gemini-cli, "
                                 "vscode, antigravity")
+            s.add_argument("--mode", choices=["observe", "enforce"],
+                           help="observe: never block or hold, only record what would have happened (a trial week); "
+                                "enforce: block and hold for real. Sets `mode:` in the gateway's rules.yaml")
         elif name == "agents":
             s.add_argument("--agent", default="all", help="cursor, gemini-cli, codex, vscode, antigravity, or all (every one installed)")
             s.add_argument("--remove", action="store_true", help="take Squidbrake's hook out again")

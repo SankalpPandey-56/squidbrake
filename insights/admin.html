@@ -841,6 +841,8 @@ function row(p) {
       ${p.paused ? `<div class="mini">paused by emergency stop: ${p.paused}</div>` : ""}
       ${p.stopped ? `<div class="mini"><b>stopped ${p.stopped}</b>${savedText(p.saved) ? " · saved " + esc(savedText(p.saved)) : ""}</div>` : ""}
       ${p.decide_median_s !== null && p.decide_median_s !== undefined ? `<div class="mini">decided in ${fmtSecs(p.decide_median_s)} (median)</div>` : ""}
+      ${w.legit ? `<div class="mini">marked legit: ${w.legit} of ${w.held + w.blocked + (w.would_block || 0) + (w.would_hold || 0)}</div>` : ""}
+      ${p.latency_ms && p.latency_ms.p50 != null ? `<div class="mini">gateway p50 ${p.latency_ms.p50} ms · p95 ${p.latency_ms.p95} ms</div>` : ""}
       ${p.trend !== null && p.trend !== undefined ? `<div class="mini"><span class="${p.trend >= 0 ? "up" : "down"}">${p.trend > 0 ? "+" : ""}${p.trend}%</span> vs last week</div>` : ""}</td>
     <td>${agents}</td><td>${hits}</td>
     <td><div class="acts">${followUp(p) ? `<button class="btn" data-copy="${esc(followUp(p))}" title="A message for where they are now">Follow-up</button>` : ""}

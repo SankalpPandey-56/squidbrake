@@ -12,7 +12,9 @@ Nothing is sent unless you join. What is sent, at start and every 6 hours (a hos
   - the agents connected, by their labels (e.g. "claude-code", "antigravity"), and which agents on this computer
     have Squidbrake's hook in their settings (so a pilot that installed but never connected an agent can be helped)
   - per day, for the last 7 days: how many actions were allowed, held, approved, rejected, blocked, timed out or failed,
-    and how many were paused by an emergency stop (counted apart from what rules blocked)
+    and how many were paused by an emergency stop (counted apart from what rules blocked), and how many a person
+    marked "this was legit" (squidbrake feedback)
+  - how long the gateway took to decide, as p50 / p95 / p99 milliseconds
   - which rules blocked or held things (rule ids such as "command:catastrophic_command")
   - for each action held or blocked in the last 7 days: when, which agent, the program only (e.g. "rm", "git"),
     the rule and its reason, what happened (approved, rejected, blocked, timed out), how long a person took,
@@ -37,6 +39,8 @@ from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import case, func, select
+
+import weekly
 
 log = logging.getLogger("gateway")
 INTERVAL = int(os.getenv("SQUIDBRAKE_PILOT_INTERVAL", str(6 * 3600)))   # hosted pilots use a shorter one
@@ -139,8 +143,9 @@ def usage(engine, events, mode: str, rules: int, version: str, reasons: dict | N
     with engine.connect() as conn:
         days = {d: {"events": int(t or 0), "allowed": int(a or 0), "held": int(h or 0), "approved": int(ap or 0),
                     "rejected": int(rj or 0), "blocked": int(b or 0), "timed_out": int(to or 0), "failed": int(f or 0),
-                    "would_block": int(wb or 0), "would_hold": int(wh or 0), "paused": int(ps or 0)}
-                for d, t, a, h, ap, rj, b, to, f, wb, wh, ps in conn.execute(select(
+                    "would_block": int(wb or 0), "would_hold": int(wh or 0), "paused": int(ps or 0),
+                    "legit": int(lg or 0)}
+                for d, t, a, h, ap, rj, b, to, f, wb, wh, ps, lg in conn.execute(select(
                     day, func.count(),
                     n((events.c.decision == "allow") & events.c.decided_by.is_(None)),
                     n(events.c.approval_deadline.isnot(None)),
@@ -152,6 +157,7 @@ def usage(engine, events, mode: str, rules: int, version: str, reasons: dict | N
                     n(events.c.would == "deny"),
                     n(events.c.would == "review"),
                     n((events.c.status == "denied") & events.c.decided_by.is_(None) & paused.is_(True)),
+                    n(events.c.feedback == "legit"),            # a person said a hold or block should have run
                 ).where(in_week).group_by(day)).all()}
         agent = func.coalesce(events.c.source, events.c.client)
         agents = dict(conn.execute(select(agent, func.count()).where(in_week).group_by(agent)).all())
@@ -161,10 +167,12 @@ def usage(engine, events, mode: str, rules: int, version: str, reasons: dict | N
         ).group_by(events.c.rule_id).order_by(func.count().desc()).limit(15)).all())
         total, first = conn.execute(select(func.count(), func.min(events.c.created_at)).select_from(events)).one()
         held = catches(conn, events, since, reasons or {})
+        took = [ms for (ms,) in conn.execute(select(events.c.decision_ms).where(
+            in_week, events.c.decision_ms.isnot(None)).limit(50000))]
     return {"version": version, "os": f"{platform.system()} {platform.release()}", "python": platform.python_version(),
             "mode": mode, "rules": rules, "agents": {str(k): v for k, v in agents.items() if k},
             "days": days, "rules_hit": rules_hit, "total_events": total, "first_event": (first or "")[:10],
-            "catches": held, "connected": connected}
+            "catches": held, "connected": connected, "latency_ms": weekly.percentiles(took)}
 
 
 def _post(server: str, path: str, body: dict) -> dict:

@@ -35,9 +35,11 @@
 default: review
 default_reason: This changes something, so a person has to approve it
 
-# enforce: block and hold for real. shadow: block and hold nothing, only record what would have happened
-# (Reports shows "would block" / "would hold"), which is the easy way to try Squidbrake on real work.
-# Stops and catastrophic commands (rm -rf /, wiping a drive) are enforced in shadow mode too.
+# enforce: block and hold for real. observe (or shadow): block and hold nothing, only record what would have happened
+# (Reports and `squidbrake report --week` show "would block" / "would hold"), the easy way to try Squidbrake on real
+# work. Stops, catastrophic commands (rm -rf /, wiping a drive) and an agent reaching for Squidbrake's own approval
+# path are enforced in observe mode too. A rule or sequence can set its own `mode: enforce | observe`, e.g. enforce
+# the catastrophic ones first and observe the rest.
 mode: enforce
 shadow_agents: []          # shadow mode for just these agents (source or key names, globs), e.g. ["new-bot*"]
 

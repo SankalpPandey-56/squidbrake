@@ -70,6 +70,7 @@ import pilot
 import policy_edit
 import risk
 import selfguard
+import weekly
 import siem
 import signing
 import taint
@@ -467,7 +468,11 @@ events = Table(
     Column("proof_status", String(20)),             # did the change really happen? confirmed | mismatch | error
     Column("proof", Text),                          # JSON: what was checked, where, and what it found (proof.py)
     Column("brief", Text),                          # JSON: the AI approval brief {text, model, at} (advice only)
-    Column("decided_with", String(200)),            # how the person decided, e.g. "passkey: Pat's iPhone"
+    Column("decided_with", String(200)),
+    Column("decision_ms", Float),                   # how long the gateway took to decide (what the agent waited)
+    Column("feedback", String(10)),                 # a person's verdict on a hold or block: legit | right
+    Column("feedback_by", String(200)),
+    Column("feedback_at", String(32)),            # how the person decided, e.g. "passkey: Pat's iPhone"
 )
 
 # Small key/value store for state all workers share: the emergency stop and notification settings.
@@ -822,6 +827,17 @@ COMMAND_DEFAULTS = {
 }
 
 
+def _rule_mode(r: dict, rid: str) -> str | None:
+    """A rule's own `mode: enforce | observe` (None = the top-level mode)."""
+    m = r.get("mode")
+    if m is None:
+        return None
+    m = str(m).lower().replace("observe", "shadow")
+    if m not in ("enforce", "shadow"):
+        raise ValueError(f"{rid}: mode must be enforce or observe")
+    return m
+
+
 class Policy:
     """rules.yaml, hot-reloaded whenever the file changes. First matching rule wins."""
 
@@ -896,7 +912,7 @@ class Policy:
             after, count = r.get("after"), r.get("count")
             if not after and not count:
                 raise ValueError(f"sequences.{rid}: needs `after:` or `count:`")
-            seq = {"id": rid, "action": action, "reason": r.get("reason") or rid,
+            seq = {"id": rid, "action": action, "reason": r.get("reason") or rid, "mode": _rule_mode(r, rid),
                    "match": cls._compile_match(r.get("match") or {}), "after": None, "count": None}
             if after:
                 scope = after.get("scope", "session")
@@ -1010,6 +1026,7 @@ class Policy:
                         "approvers": [approvers] if isinstance(approvers, str) else approvers,
                         # maker-checker: the person whose agent asked can't approve it, whatever Settings say
                         "second_person": bool(r.get("second_person")),
+                        "mode": _rule_mode(r, r.get("id") or f"rule-{i}"),
                     })
                 default = data.get("default", "allow")
                 if default not in ("allow", "deny", "review") or any(r["action"] not in ("allow", "deny", "review") for r in rules):
@@ -1047,9 +1064,9 @@ class Policy:
                     if dc[k] not in ("block", "review", "warn", "off"):
                         raise ValueError(f"data_checks.{k} must be block, review, warn or off")
                 dc["where"] = [dc["where"]] if isinstance(dc["where"], str) else list(dc["where"] or [])
-                mode = str(data.get("mode", "enforce")).lower()
+                mode = str(data.get("mode", "enforce")).lower().replace("observe", "shadow")
                 if mode not in ("enforce", "shadow"):
-                    raise ValueError("mode must be enforce or shadow")
+                    raise ValueError("mode must be enforce or observe (shadow)")
                 wu = data.get("when_unreachable", "block")
                 wu = "allow" if wu is True or str(wu).lower() == "allow" else \
                     "block" if wu is False or str(wu).lower() in ("block", "deny") else None
@@ -1080,9 +1097,14 @@ class Policy:
 
     DEFAULT_RULE = {"timeout_seconds": APPROVAL_TIMEOUT, "on_timeout": "deny", "approvers": None}
 
-    def shadow_for(self, source: str | None, client: str) -> bool:
-        """Shadow mode: record what would happen, but let it through (everything, or the agents listed)."""
+    def shadow_for(self, source: str | None, client: str, rule_id: str | None = None) -> bool:
+        """Shadow mode: record what would happen, but let it through (everything, or the agents listed). A rule or
+        sequence with its own `mode:` wins, so a team can enforce the catastrophic ones first and observe the rest."""
         self._maybe_reload()
+        rid = str(rule_id or "")
+        own = next((r["mode"] for r in self.rules if r["id"] == rid), None) or             next((q["mode"] for q in self.sequences if f"sequence:{q['id']}" == rid), None)
+        if own:
+            return own == "shadow"
         if self.mode == "shadow":
             return True
         return any(fnmatch.fnmatchcase((k or "").lower(), g.lower()) for g in self.shadow_agents for k in (source, client))
@@ -1777,6 +1799,7 @@ def reported_effects(metadata: dict | None) -> str | None:
 
 
 def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
+    started = time.perf_counter()
     signals: list[dict] = []
     if spent := usage_from_metadata(ev.metadata):      # the hook reports model tokens with each action
         spent.source, spent.session_id = ev.source, ev.session_id
@@ -1840,7 +1863,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
     would = None
     # Shadow mode lets it through but records what would have happened. Stops and catastrophic commands still apply.
     if decision in ("deny", "review") and rule_id not in ("emergency-stop", "session-stop", "command:catastrophic_command") \
-            and not str(rule_id).startswith(("budget:", "self-protection:")) and policy.shadow_for(ev.source, client):
+            and not str(rule_id).startswith(("budget:", "self-protection:")) and policy.shadow_for(ev.source, client, rule_id):
         would = decision
         reason = f"Shadow mode, allowed. Would have {'been blocked' if decision == 'deny' else 'waited for approval'}: {reason}"
         decision = "allow"
@@ -1889,6 +1912,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
         "signals": json.dumps(signals) if signals else None,
         "would": would,
         "risk": risk_score, "risk_why": json.dumps(risk_why) if risk_why else None,
+        "decision_ms": round((time.perf_counter() - started) * 1000, 2),
     }
     with audited_tx() as conn:
         record_policy_version(conn)
@@ -3446,7 +3470,7 @@ def build_report(days: int) -> dict:
             "shadow": {"mode": policy.mode, "agents": policy.shadow_agents,
                        "would_block": sum(a["would_block"] or 0 for a in agents),
                        "would_hold": sum(a["would_hold"] or 0 for a in agents)},
-            "audit": verify_audit_chain()}
+            "audit": verify_audit_chain(), "week": weekly.build(engine, events, days)}
 
 
 CONTROL_CHANGES = ("team.", "settings.", "controls.", "policy.version")
@@ -3516,6 +3540,36 @@ def evidence_pack(days: int = Query(90, ge=1, le=3650), who: str = Depends(perso
         audit(conn, who, "audit.exported", None, format="evidence-pack", days=days)
     return Response(evidence.render_html(build_evidence(days, who)), media_type="text/html", headers={
         "Content-Disposition": f'inline; filename="squidbrake-evidence-pack-{datetime.now():%Y%m%d}.html"'})
+
+
+class FeedbackIn(BaseModel):
+    verdict: Literal["legit", "right"]                 # legit: it should have run (a false positive)
+
+
+def give_feedback(event_id: str, verdict: str, who: str) -> dict:
+    """A person says whether a hold or block was right. Counted per rule and per week (weekly.py)."""
+    with audited_tx() as conn:
+        row = conn.execute(select(events).where(events.c.id == event_id)).first()
+        if row is None:
+            raise HTTPException(404, "event not found")
+        if not (row.approval_deadline or row.would or (row.status == "denied" and not row.decided_by)):
+            raise HTTPException(409, "only actions Squidbrake held or blocked (or would have) can be marked")
+        conn.execute(update(events).where(events.c.id == event_id)
+                     .values(feedback=verdict, feedback_by=who, feedback_at=utcnow()))
+        audit(conn, who, "event.feedback", event_id, verdict=verdict, rule_id=row.rule_id)
+    return {"id": event_id, "feedback": verdict, "rule_id": row.rule_id}
+
+
+@app.post("/v1/events/{event_id}/feedback")
+def post_feedback(event_id: str, body: FeedbackIn, who: str = Depends(person)):
+    return give_feedback(event_id, body.verdict, who)
+
+
+@app.get("/v1/reports/week")
+def report_week(days: int = Query(7, ge=1, le=366), format: Literal["json", "md"] = "json",
+                _: str = Depends(person)):
+    r = weekly.build(engine, events, days)
+    return Response(weekly.markdown(r), media_type="text/markdown") if format == "md" else r
 
 
 @app.get("/v1/reports/summary")
@@ -4343,6 +4397,14 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("evidence", help="write the evidence pack (a printable page for an auditor)")
     e.add_argument("--days", type=int, default=90, help="period to cover (default 90)")
     e.add_argument("--out", default=None, help="file to write (default squidbrake-evidence-pack-DATE.html)")
+    rp = sub.add_parser("report", help="the weekly report: actions, holds, blocks, false positives, latency, chains")
+    rp.add_argument("--week", action="store_true", help="the last 7 days (the default)")
+    rp.add_argument("--days", type=int, default=7)
+    rp.add_argument("--json", action="store_true", help="JSON instead of Markdown")
+    rp.add_argument("--out", help="write it to this file")
+    fb = sub.add_parser("feedback", help="say whether a hold or block was right: feedback EVENT_ID legit|right")
+    fb.add_argument("event_id")
+    fb.add_argument("verdict", choices=["legit", "right"])
     pl = sub.add_parser("pilot", help="join or leave a pilot: share usage counts (never content) with the Squidbrake team")
     pl.add_argument("action", choices=["join", "leave", "status"])
     pl.add_argument("code", nargs="?", help="the pilot code you were given (join)")
@@ -4354,7 +4416,31 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     return {"run": _cli_run, "init": _cli_init, "resume": _cli_resume, "add-key": _cli_add_key, "remove-key": _cli_remove_key,
             "keys": _cli_keys, "verify": lambda a: verify.main([a.file]), "pilot": _cli_pilot,
-            "evidence": _cli_evidence, "lockdown": _cli_lockdown, "explain": _cli_explain}[args.cmd](args)
+            "evidence": _cli_evidence, "lockdown": _cli_lockdown, "explain": _cli_explain,
+            "report": _cli_report, "feedback": _cli_feedback}[args.cmd](args)
+
+
+def _cli_report(args) -> int:
+    migrate(engine)
+    r = weekly.build(engine, events, 7 if args.week else args.days)
+    text = json.dumps(r, indent=2) if args.json else weekly.markdown(r)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"Written to {Path(args.out).resolve()}")
+    else:
+        print(text)
+    return 0
+
+
+def _cli_feedback(args) -> int:
+    migrate(engine)
+    try:
+        r = give_feedback(args.event_id, args.verdict, "command-line")
+    except HTTPException as e:
+        print(e.detail, file=sys.stderr)
+        return 1
+    print(f"Marked {r['id']} as {r['feedback']} (rule {r['rule_id'] or 'default'}).")
+    return 0
 
 
 def _cli_lockdown(args) -> int:

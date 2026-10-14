@@ -78,6 +78,8 @@ with db() as _c:
     # hosted pilots: their own gateway at <subdomain>.<HOSTED_DOMAIN>, started by provision.py on the server
     if "connected" not in {r[1] for r in _c.execute("PRAGMA table_info(installs)")}:
         _c.execute("ALTER TABLE installs ADD COLUMN connected TEXT")     # agents with Squidbrake's hook, as JSON
+    if "latency" not in {r[1] for r in _c.execute("PRAGMA table_info(installs)")}:
+        _c.execute("ALTER TABLE installs ADD COLUMN latency TEXT")       # decision time p50/p95/p99 ms, as JSON
     _have = {r[1] for r in _c.execute("PRAGMA table_info(pilots)")}
     for _col, _type in (("hosted", "INTEGER NOT NULL DEFAULT 0"), ("subdomain", "TEXT"), ("state", "TEXT"),
                         ("admin_key", "TEXT"), ("agent_key", "TEXT"), ("keys_revealed_at", "TEXT"), ("error", "TEXT"),
@@ -340,6 +342,10 @@ async def ping(request: Request):
             raise HTTPException(403, "this install hasn't joined (or has left) the pilot")
         connected = u.get("connected")
         connected = json.dumps([str(a)[:40] for a in connected[:20]]) if isinstance(connected, list) else None
+        lat = u.get("latency_ms") if isinstance(u.get("latency_ms"), dict) else {}
+        lat = json.dumps({k: float(lat[k]) for k in ("p50", "p95", "p99", "n")
+                          if isinstance(lat.get(k), (int, float))}) if lat else None
+        c.execute("UPDATE installs SET latency=? WHERE install_id=?", (lat, p.install_id))
         c.execute("""UPDATE installs SET last_seen=?, version=?, os=?, mode=?, rules=?, agents=?, rules_hit=?,
                      total_events=?, first_event=?, connected=? WHERE install_id=?""",
                   (now(), str(u.get("version", ""))[:40], str(u.get("os", ""))[:80], str(u.get("mode", ""))[:20],
@@ -514,7 +520,7 @@ def reveal_keys(code: str, request: Request):
 
 
 SUMS = ("events", "allowed", "held", "approved", "rejected", "blocked", "timed_out", "failed", "would_block", "would_hold",
-        "paused")
+        "paused", "legit")
 # Blocks from an emergency stop a person switched on: not something a rule caught, so never counted as "stopped"
 PAUSE_RULES = ("emergency-stop", "session-stop")
 
@@ -623,6 +629,8 @@ def overview(request: Request):
                     "outdated": bool(latest) and any(_version(v) < _version(latest) for v in
                                                      {i["version"] for i in active if i["version"]}),
                     "decide_median_s": waits[len(waits) // 2] if waits else None, "health": health,
+                    "latency_ms": next((json.loads(i["latency"]) for i in sorted(active, key=lambda i: i["last_seen"] or "",
+                                        reverse=True) if i["latency"]), None),
                     "idle_days": idle, "trend": (None if not prev else round(100 * (week["events"] - prev) / prev)),
                     "link": f"{public_url(request)}/start/{p['code']}", "stage": stage, "installs": len(active),
                     "last_seen": last or None, "versions": sorted({i["version"] for i in active if i["version"]}),

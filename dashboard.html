@@ -1940,6 +1940,23 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
       e.decided_with ? el("span", { class: "tag", style: "margin-left:6px", title: "Signed by the device; the signature is in the audit trail", text: `✓ ${e.decided_with}` }) : null, note,
       el("div", { class: "muted", style: "margin-top:4px", text: `Held by: ${e.reason || ""}${e.rule_id ? " (" + e.rule_id + ")" : ""}` }));
   }
+  // A person's verdict on a hold or block: "this was legit" counts as a false positive in the weekly report
+  function feedbackEl(e) {
+    const stopped = e.would || (e.approval_deadline && e.status !== "awaiting_approval") || (e.status === "denied" && !e.decided_by);
+    if (!stopped) return null;
+    const box = el("div", { class: "hint", style: "margin:6px 0" });
+    const mark = (verdict) => async () => {
+      try {
+        await apiPost(`/v1/events/${encodeURIComponent(e.id)}/feedback`, { verdict });
+        e.feedback = verdict; box.replaceWith(feedbackEl(e) || el("span"));
+        toast(verdict === "legit" ? "Marked: this should have run" : "Marked: stopping it was right");
+      } catch (err) { toast(err.message || String(err)); }
+    };
+    box.append(e.feedback ? `You said: ${e.feedback === "legit" ? "this was legit (a false positive)" : "stopping it was right"}. ` : "Was stopping this right? ",
+      el("button", { class: "linkish", text: "This was legit", onclick: mark("legit") }), " · ",
+      el("button", { class: "linkish", text: "Stopping it was right", onclick: mark("right") }));
+    return box;
+  }
   // ---------- the story behind an action: history-check warnings + what the agent did just before
   const SIGNAL_TITLES = { effect: "What it changes",
     impersonation: "Possible scam", payment_request_in_message: "Payment requested in a message",
@@ -2047,7 +2064,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
     $("#drTitle").replaceChildren(avatarEl(agentOf(e), "sm"), el("span", { text: e.name }));
     $("#drSub").replaceChildren(statusEl(e.status), `  ·  ${agentOf(e)}  ·  ${new Date(e.created_at).toLocaleString()}`);
     const body = $("#drBody");
-    const kids = [approvalBanner(e)];
+    const kids = [approvalBanner(e), feedbackEl(e)];
     if (e.status === "denied" && !e.decided_by) kids.push(el("div", { class: "banner denied" }, el("b", { text: "Blocked: " }), e.reason || "", e.rule_id ? el("span", { class: "muted mono", text: `  (${e.rule_id})` }) : null));
     kids.push(briefEl(e), snapshotEl(e), proofEl(e));
     if (e.status === "awaiting_approval" && !e.brief && me && me.can_approve)
@@ -2352,7 +2369,12 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
       tile("Failed", nf.format(s.failed || 0), "errors from tools", "failed"),
       ...(r.shadow && (r.shadow.mode === "shadow" || r.shadow.agents.length || r.shadow.would_block || r.shadow.would_hold)
         ? [tile("Shadow mode: would block", nf.format(r.shadow.would_block), "let through, only recorded", "denied"),
-           tile("Shadow mode: would hold", nf.format(r.shadow.would_hold), "would have asked a person", "awaiting_approval")] : []));
+           tile("Shadow mode: would hold", nf.format(r.shadow.would_hold), "would have asked a person", "awaiting_approval")] : []),
+      ...(r.week ? [
+        tile("Decision time", r.week.latency_ms.p50 == null ? "—" : `${r.week.latency_ms.p50} ms`,
+             r.week.latency_ms.p95 == null ? "p50" : `p50 · p95 ${r.week.latency_ms.p95} ms · p99 ${r.week.latency_ms.p99} ms`),
+        tile("False positives", r.week.false_positives.rate == null ? "—" : `${(r.week.false_positives.rate * 100).toFixed(1)}%`,
+             `${r.week.false_positives.legit} of ${r.week.false_positives.stopped} marked "this was legit"`)] : []));
     const au = r.audit;
     $("#auditCard").replaceChildren(el("div", { class: "card-head" }, el("h2", { text: "Tamper check" }),
         el("button", { class: "linkish", text: "Re-check now", onclick: loadReports })),
