@@ -41,13 +41,11 @@ def stopped(d) -> bool:
 
 # ---- item 4: self-approval ----------------------------------------------------------------------------------------
 
-@gap("an agent can mint itself an approver key with the CLI, then approve its own held action")
 @pytest.mark.parametrize("command", ["squidbrake add-key helper --approver", "python server.py add-key helper --approver"])
 def test_agent_cannot_make_an_approver_key(c, shipped, command):
     assert stopped(act(c, "Bash", {"command": command}))
 
 
-@gap("the Read tool can read the approval-link secret, so an agent can forge an approval link")
 @pytest.mark.parametrize("file", ["secret.key", "keys.json", "ledger.key", "gateway.db"])
 def test_agent_cannot_read_squidbrakes_secrets(c, shipped, file):
     assert stopped(act(c, "Read", {"file_path": f"{DATA}/{file}"}))
@@ -63,7 +61,6 @@ def test_forged_link_approves_when_the_secret_is_known(c):
     assert c.post(f"/v1/a/{token}/approve").json()["status"] == "pending"
 
 
-@gap("an agent can call the approval endpoints from its own shell")
 @pytest.mark.parametrize("command", [
     "curl -s -X POST http://127.0.0.1:8080/v1/a/eyJ4Ijox.abc/approve",
     "curl -s -X POST http://localhost:8080/v1/events/1/approve -H 'X-Gateway-Key: gw_x'",
@@ -72,7 +69,6 @@ def test_agent_cannot_call_the_approval_api(c, shipped, command):
     assert stopped(act(c, "Bash", {"command": command}))
 
 
-@gap("an agent can rewrite the gateway's database from inside its data folder")
 def test_agent_cannot_edit_the_gateway_database(c, shipped):
     d = act(c, "Bash", {"command": "sqlite3 data/gateway.db \"update events set status='pending'\""},
             metadata={"cwd": f"{HOME}/.squidbrake"})
@@ -92,13 +88,12 @@ def test_agent_key_cannot_approve(c):
     ("Write", {"file_path": f"{HOME}/.squidbrake/rules.yaml", "content": "default: allow"}),
     ("Bash", {"command": "squidbrake connect all --remove"}),
     ("Bash", {"command": "pip uninstall -y squidbrake"}),
-    ("Bash", {"command": "echo 'export GATEWAY_FAIL_OPEN=1' >> ~/.bashrc"}),
+    ("Bash", {"command": "printf 'export GATEWAY_FAIL_OPEN=1' >> ~/.bashrc"}),
 ])
 def test_self_modification_that_is_held(c, shipped, name, inp):
     assert stopped(act(c, name, inp))
 
 
-@gap("editing the installed Squidbrake package, or setting a variable that loosens it, runs without a person")
 @pytest.mark.parametrize("name,inp", [
     ("Edit", {"file_path": "C:/Python311/Lib/site-packages/squidbrake/cli.py", "old_string": "a", "new_string": "b"}),
     ("Edit", {"file_path": "/usr/lib/python3/site-packages/claude_hook.py", "old_string": "a", "new_string": "b"}),
@@ -106,7 +101,7 @@ def test_self_modification_that_is_held(c, shipped, name, inp):
     ("Bash", {"command": "setx GATEWAY_FAIL_OPEN 1"}),
     ("Bash", {"command": "GATEWAY_AUTH=off squidbrake run --port 8080"}),
 ])
-def test_self_modification_gaps(c, shipped, name, inp):
+def test_self_modification_of_the_install(c, shipped, name, inp):
     assert stopped(act(c, name, inp))
 
 
@@ -133,10 +128,14 @@ def test_chain_survives_a_new_conversation_and_another_agent(c, shipped):
     """Backups off in one conversation by one agent, the delete in another conversation by another agent. The state is
     the events table, so a restart doesn't lose it either (AUDIT.md item 2 ran it across two processes)."""
     tag = uuid.uuid4().hex[:8]
-    act(c, "Bash", {"command": f"aws rds modify-db-instance --db-instance-identifier db{tag} --backup-retention-period 0"},
-        source="cursor", output="ok")
-    d = act(c, "Bash", {"command": f"aws rds delete-db-instance --db-instance-identifier db{tag}"})
-    assert d["rule_id"] == "sequence:destroy-after-recovery-removed"
+    first = act(c, "Bash", {"command": f"aws rds modify-db-instance --db-instance-identifier db{tag} --backup-retention-period 0"},
+                source="cursor", output="ok")
+    try:
+        d = act(c, "Bash", {"command": f"aws rds delete-db-instance --db-instance-identifier db{tag}"})
+        assert d["rule_id"] == "sequence:destroy-after-recovery-removed"
+    finally:   # the rule looks at every agent: don't leave "backups off" behind for the incident replays
+        with server.engine.begin() as conn:
+            conn.execute(server.events.update().where(server.events.c.id == first["event_id"]).values(status="failed"))
 
 
 @gap("count rules are per agent: a loop split across two agents of the same person isn't counted together")

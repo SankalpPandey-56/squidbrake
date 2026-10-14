@@ -69,6 +69,7 @@ import outbound
 import pilot
 import policy_edit
 import risk
+import selfguard
 import siem
 import signing
 import taint
@@ -1007,6 +1008,8 @@ class Policy:
                         "timeout_seconds": int(r.get("timeout_seconds", APPROVAL_TIMEOUT)),
                         "on_timeout": r.get("on_timeout", "deny"),
                         "approvers": [approvers] if isinstance(approvers, str) else approvers,
+                        # maker-checker: the person whose agent asked can't approve it, whatever Settings say
+                        "second_person": bool(r.get("second_person")),
                     })
                 default = data.get("default", "allow")
                 if default not in ("allow", "deny", "review") or any(r["action"] not in ("allow", "deny", "review") for r in rules):
@@ -1779,11 +1782,16 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
         spent.source, spent.session_id = ev.source, ev.session_id
         record_usage(client, spent)
     already_done = ev.error is not None or ev.output is not None
+    # Squidbrake protecting itself (selfguard.py): checked in code, so no rules.yaml edit or shadow mode loosens it
+    guard = None if already_done else selfguard.check(ev.kind, ev.name, ev.input, ev.metadata, KEYS_PATH.parent)
     if stop := stopped_for(ev.source, client, ev.session_id):
         decision, rule = "deny", policy.DEFAULT_RULE
         rule_id = "session-stop" if stop.get("session") else "emergency-stop"
         reason = stop_message(stop)
         remind_if_still_stopped(stop, ev.name)
+    elif guard and guard["effect"] == "block":
+        decision, rule, rule_id, reason, signals = "deny", policy.DEFAULT_RULE, "self-protection:approval", \
+            guard["message"], [guard]
     elif not already_done and ev.kind != "prompt" and (over := budget_hit(ev.source, client)):
         decision, rule, rule_id, reason = "deny", policy.DEFAULT_RULE, f"budget:{over['budget']}", over["message"]
     else:
@@ -1796,7 +1804,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
             with engine.connect() as conn:
                 # Most telling first: a sequence names the step that caused it; history checks are specific to
                 # the business (who asked for this payment); taint and command checks are more general.
-                signals = sequence_signals(conn, ev, client)
+                signals = ([guard] if guard else []) + sequence_signals(conn, ev, client)
                 # A command that only looks isn't a change: running `git status` twice is not a duplicate.
                 signals += history_signals(conn, ev.name, redact(ev.input), to_stored_json(ev.input), ev.source,
                                            ev.session_id, is_change=decision == "review" and not only_reads,
@@ -1805,6 +1813,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
             blocking = next((s for s in signals if s["effect"] == "block"), None)
             needs_person = next((s for s in signals if s["effect"] == "review"), None)
             signal_id = lambda s: f"sequence:{s['rule']}" if s["check"] == "sequence" else \
+                f"self-protection:{s['check']}" if s["check"] in ("approval", "tamper") else \
                 f"command:{s['check']}" if s["check"].endswith("_command") else \
                 f"data:{s['check']}" if s["check"] in DATA_EFFECT_KEYS else \
                 f"taint:{s['check']}" if s["check"] in TAINT_EFFECT_KEYS else f"history:{s['check']}"
@@ -1831,7 +1840,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
     would = None
     # Shadow mode lets it through but records what would have happened. Stops and catastrophic commands still apply.
     if decision in ("deny", "review") and rule_id not in ("emergency-stop", "session-stop", "command:catastrophic_command") \
-            and not str(rule_id).startswith("budget:") and policy.shadow_for(ev.source, client):
+            and not str(rule_id).startswith(("budget:", "self-protection:")) and policy.shadow_for(ev.source, client):
         would = decision
         reason = f"Shadow mode, allowed. Would have {'been blocked' if decision == 'deny' else 'waited for approval'}: {reason}"
         decision = "allow"
@@ -1888,9 +1897,17 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
               session_id=ev.session_id, status=status, decision=decision, rule_id=rule_id, reason=reason,
               input_sha256=_sha(row["input"]), output_sha256=_sha(row["output"]),
               signals=[f"{x['check']}:{x['effect']}" for x in signals] or None, would=would)
+        if rule_id == "self-protection:approval":    # high severity: an agent reaching for the approval path
+            audit(conn, client, "security.self_approval_attempt", row["id"], name=ev.name, source=ev.source,
+                  session_id=ev.session_id, reason=reason)
     audit_log.info(json.dumps({k: row[k] for k in ("id", "created_at", "client", "source", "session_id",
                                                     "kind", "name", "status", "rule_id")}))
     forwarder.emit(siem_record("decision", row))
+    if rule_id == "self-protection:approval":
+        forwarder.emit(siem_record("self_approval_attempt", row))
+        threading.Thread(target=notify_text, daemon=True, args=(
+            f"Squidbrake: {ev.source or client} tried to reach the approval path",
+            f"Blocked {ev.name}: {reason} Look at what this agent is doing.")).start()
     if decision != "deny" and any(Policy.matches(p, {"kind": ev.kind, "name": ev.name, "source": ev.source,
                                                      "client": client, "session_id": ev.session_id}, ev.input)
                                   for p in policy.proofs):
@@ -2318,7 +2335,8 @@ def decide(event_id: str, outcome: Literal["allow", "deny"], who: str, note: str
         if keystore.enabled and who == row.client:
             raise HTTPException(403, "a key cannot approve its own request")
         owner = keystore.info(row.client).get("owner") if keystore.enabled else None
-        if owner and owner == who and settings().get("second_person"):
+        per_rule = any(r["id"] == row.rule_id and r.get("second_person") for r in policy.rules)
+        if owner and owner == who and (settings().get("second_person") or per_rule):
             raise HTTPException(403, f"'{row.client}' is {who}'s own agent and second-person approval is on, "
                                      "so someone else has to decide")
         # Conditional update: if two approvers click at once, exactly one wins.

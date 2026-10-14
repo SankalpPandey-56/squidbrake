@@ -28,7 +28,9 @@
 #   timeout_seconds  how long to wait for a person (default APPROVAL_TIMEOUT, 300)
 #   on_timeout       deny (default) | allow  - what happens if nobody decides in time
 #   approvers        who may decide: key names or roles, e.g. ["role:finance", "priya"]; default = any approver
-# A key can never approve its own request.
+#   second_person    true: the person whose agent asked can't approve it (maker-checker), even with
+#                    Settings > second-person approval off
+# A key can never approve its own request, and an agent can't reach the approval path at all (selfguard.py).
 
 default: review
 default_reason: This changes something, so a person has to approve it
