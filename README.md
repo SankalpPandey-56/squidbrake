@@ -46,25 +46,38 @@ prompts, the audit trail) never leaves it; only anonymous usage counts go out (s
 - **Works with real agents:** `squidbrake connect all` connects Claude Code, Cursor, Codex, Gemini CLI, VS Code
   Copilot and Antigravity (their commands, reads and edits, via hooks) and the MCP servers they already use; any MCP
   app (Stripe, GitHub, Slack, databases, internal tools) can be wrapped too.
-- **Agents can't switch it off:** an agent removing, stopping or uninstalling Squidbrake waits for a person. For a
+- **An agent can't approve itself:** reading Squidbrake's keys or link secret, minting an approver key, or calling the
+  approval API from the agent's own tools is blocked in code, before your rules and in observe mode too, and the
+  attempt is recorded and sent to you ([tests](tests/test_approval_integrity.py)).
+- **Agents can't switch it off:** an agent removing, stopping or uninstalling Squidbrake waits for a person, and so does
+  editing its installed files or setting a variable that loosens it. Every minute it checks that its hook in each
+  agent, `rules.yaml` and its installed files are unchanged, and tells you if not. For a
   company, `squidbrake lockdown --url https://gateway.yourcompany.com` writes the managed-settings files IT pushes to
   every machine (Claude Code, Codex, Gemini CLI, Cursor), so each agent must run Squidbrake's hook and
   `--dangerously-skip-permissions` / `--yolo` are turned off; only someone with admin rights on the machine can undo
   that. One policy, every agent.
 - **Rules, not vibes:** `rules.yaml` says what runs by itself, what's blocked, and what waits for a person.
   No LLM in the decision path.
-- **Reads what a command really does:** `ls && rm -rf ~/`, `bash -c "..."`, `rmdir /s /q d:\` or `curl ... | sh` are
-  split and read before they run. Wiping a disk or home folder is blocked; `git push --force`, `terraform destroy`,
+- **Reads what a command really does:** `ls && rm -rf ~/`, `bash -c "..."`, `rmdir /s /q d:\`, `curl ... | sh`, or a
+  command sent over `ssh`, `docker exec` or `kubectl exec` are split and read before they run. Wiping a disk or home folder is blocked; `git push --force`, `terraform destroy`,
   `kubectl delete` or cloud deletes wait for a person; commands that only look (`ls`, `git status`) run without asking.
 - **Catches prompt injection without a model:** if an agent sends data to an address that only a web page, email or
   issue mentioned (not you, not your own systems), it's held and the approver is told where the address came from.
-- **Judges by history:** blocks a retry of something a person rejected, catches look-alike domains
-  (`acrne-corp.com` pretending to be `acme.com`), flags duplicate refunds, and lets you write sequence rules
-  ("deleting a database right after its backups were turned off") that say which earlier step caused them.
+- **Judges by history, across conversations and agents:** blocks a retry of something a person rejected, catches
+  look-alike domains (`acrne-corp.com` pretending to be `acme.com`), flags duplicate refunds, and lets you write
+  sequence rules ("deleting a database right after its backups were turned off") that say which earlier step caused
+  them, even when that step was yesterday, in another conversation, by another agent.
+- **Proof in a week, without stopping anything:** `squidbrake connect all --mode observe` records what it would have
+  held or blocked; `squidbrake report --week` gives the counts, the false-positive rate (from "this was legit"
+  clicks), decision time and the chains it caught.
 - **Fails closed for what matters:** if Squidbrake is down, anything that would wait for a person or be blocked, and
   any command that can't be undone, doesn't run; what the rules already let run on its own (reads, everyday coding
   work) carries on, unrecorded (`when_unreachable: block_risky`; `block` stops everything). Agents keep a copy of
-  these answers. What it can't stop: [THREAT_MODEL.md](THREAT_MODEL.md).
+  these answers.
+
+What it can't stop, with the test behind each claim: [THREAT_MODEL.md](THREAT_MODEL.md). Every claim on this page was
+checked against the code in [AUDIT.md](AUDIT.md); the gaps still open are tests that fail on purpose
+([`tests/test_audit.py`](tests/test_audit.py)).
 
 See [SHOWCASE.md](SHOWCASE.md) for a 5-minute demo with a sandbox company, and [incidents/](incidents/) for **11 real
 AI-agent incidents replayed against the shipped rules** (Replit, the Railway volume deletion, GitHub MCP, Supabase
@@ -281,24 +294,40 @@ Record an action that already happened in one call by including `output`/`error`
 `http://gateway:8080/proxy/<upstream>/...`. Optional headers: `X-Gateway-Source`, `X-Gateway-Session`.
 Denied requests get `403`; every response carries `X-Gateway-Event-Id`.
 
-## Try it on real work first: shadow mode
+## Try it on real work first: observe mode
 
-Set `mode: shadow` in `rules.yaml` (or `shadow_agents: ["new-bot*"]` for some agents) and Squidbrake blocks and holds
-nothing: it records what it *would* have done. Reports then shows **would block** and **would hold** counts, and each
-event is tagged, so a team can see a week of real decisions before switching `mode: enforce` on. Stops and
-catastrophic commands (`rm -rf /`, wiping a drive) are enforced even in shadow mode.
+```bash
+squidbrake connect all --mode observe     # or mode: observe in rules.yaml (shadow_agents: [...] for some agents)
+squidbrake report --week                  # a week later: Markdown, or --json
+```
+
+In observe mode (also called shadow) Squidbrake blocks and holds nothing: it records what it *would* have done.
+Stops, catastrophic commands (`rm -rf /`, wiping a drive) and an agent reaching for Squidbrake's own approval path are
+enforced anyway. A rule or sequence can set its own `mode: enforce | observe`, so a team can enforce the catastrophic
+ones first and observe the rest.
+
+The weekly report (also `GET /v1/reports/week` and the Reports tab) has:
+
+- actions seen, held and blocked, and what would have been held or blocked
+- the **false-positive rate**, per rule and per week, from people marking a hold or block "This was legit" in the
+  dashboard or with `squidbrake feedback EVENT_ID legit` (an agent can't mark its own)
+- **decision time**, p50 / p95 / p99, recorded for every action
+- the top 3 **chains** it caught, in plain words
 
 ## Command checks
 
 Shell tools (Claude Code's `Bash` and `PowerShell`, or any tool matching `command_checks.tools`) are read by
 [`commands.py`](commands.py) before the rules decide: the line is split on `&&`, `;`, `|` (outside quotes), and
-`sudo`, `xargs`, `bash -c`, `powershell -Command` and `$(...)` are looked inside. Nothing is ever run or expanded.
+`sudo`, `xargs`, `bash -c`, `powershell -Command`, `$(...)` and commands sent over `ssh`, `docker exec` or
+`kubectl exec` are looked inside. Nothing is ever run or expanded.
 
 | Kind | Examples | Default |
 |---|---|---|
 | catastrophic | `rm -rf /`, `rm -rf ~`, `rmdir /s /q d:\`, `mkfs`, `dd of=/dev/sda`, `chmod -R 777 /` | block |
 | irreversible | `rm -r`, `git push --force`, `git reset --hard`, `terraform destroy`, `kubectl delete`, `aws ... delete-*`, `DROP TABLE` | review |
-| hidden | `eval`, `curl ... \| sh`, `base64 -d \| bash`, `powershell -EncodedCommand` | review |
+| hidden | `eval`, `curl ... \| sh`, `base64 -d \| bash`, `powershell -EncodedCommand`, `python -c` | review |
+| written_then_run | a script the agent wrote in this conversation, then runs (`python cleanup.py`) | review |
+| edited_then_run | a script the agent changed in this conversation, then runs | warn (`review` holds it) |
 | read_only | `ls`, `cat`, `grep`, `git status` / `log` / `diff` | `allow` in the shipped `rules.yaml` |
 
 Command checks apply even when a rule allows the tool, and `read_only: allow` only relaxes the `default` (never a
@@ -335,8 +364,10 @@ outside content but not in what you asked or in your own systems' results, it's 
 > This sends to keys@evil.io (to), which appears in WebFetch (2 minutes ago) but not in anything you asked or in your
 > own systems. Content from outside can carry hidden instructions (prompt injection).
 
-Uploads from the shell count too (`curl -d @.env https://...`, `scp`, `git push`). Anything sent out after outside
-content was read gets a warning for the approver. Configure it under `taint_checks:` in `rules.yaml`.
+Uploads from the shell count too (`curl -d @.env https://...`, `scp`, `git push`). Outside content read in one
+conversation still counts in the next one, by any of the same person's agents (`taint_checks.scope: identity`; set
+`session` to keep it to one conversation). Anything sent out after outside content was read in the same conversation
+gets a warning for the approver. Configure it under `taint_checks:` in `rules.yaml`.
 
 ## Customer names and personal data in public places
 
@@ -369,13 +400,20 @@ sequences:
     action: deny
     reason: Too many refunds in a short time
     match: { name: ["*refund*"] }
-    count: { more_than: 10, within_hours: 1, scope: agent }
+    count: { more_than: 10, within_hours: 1, scope: identity }
 ```
 
 The approver then sees, for example: *Destroying data right after its backups were turned off. Because earlier:
-Bash `aws rds modify-db-instance --backup-retention-period 0` (12 minutes ago).* `after:` looks at steps in the same
-conversation that went ahead (`same_target: true` = on the same charge, file or account); `count:` counts earlier
-matching actions per `session`, `agent` or `all`. Actions: `deny`, `review` or `warn`.
+Bash `aws rds modify-db-instance --backup-retention-period 0` (12 minutes ago).* Actions: `deny`, `review` or `warn`.
+
+- `after:` looks at earlier steps that went ahead (`same_target: true` = on the same charge, file or account).
+- `count:` counts earlier matching actions.
+- `scope:` sets where both look: `session` (one conversation), `agent`, `identity` (every conversation of every agent
+  working for the same person: on your own computer all of them, on a team gateway the agents whose key works for
+  that person) or `all`.
+
+What earlier steps give an agent is kept until `within_hours` runs out, across restarts: `squidbrake capabilities`
+lists the chains in progress.
 
 ## Human approval
 
@@ -467,18 +505,20 @@ Claude Code's built-in permissions control actions for an individual agent. Squi
 
 ### What happens if Squidbrake is down?
 
-Squidbrake **fails closed**. Guarded tool calls are blocked if the gateway is unreachable, rather than being allowed
-through. Each rule can choose otherwise with `when_unreachable: allow` (and the top-level `when_unreachable:` sets the
-default). The hooks, MCP connectors and `client.py` keep a copy of these answers while the gateway answers, so they
-follow them while it's down. What runs then isn't recorded. `GATEWAY_FAIL_OPEN=1` on a machine still lets everything
-through there.
+It **fails closed for what matters** (`when_unreachable: block_risky`, the default). Anything that would wait for a
+person or be blocked doesn't run, and neither does a command that can't be undone or can't be read, or one that
+reaches for Squidbrake's own keys. What your rules already let run on its own (reads, everyday coding work) carries
+on. `when_unreachable: block` stops everything instead, and each rule can say `when_unreachable: allow | block`. The
+hooks, MCP connectors and `client.py` keep a copy of these answers while the gateway answers, so they follow them
+while it's down. What runs then isn't recorded. `GATEWAY_FAIL_OPEN=1` on a machine still lets everything through
+there.
 
 ### Does my data leave my machine?
 
 What your agents do doesn't: commands, files, prompts, tool inputs and outputs, and the audit trail stay on your
-laptop or your server. What can leave is usage counts, and only after a yes: the first run asks once (Enter means
-yes) to send the command name, version, OS, how many actions were allowed, held and blocked, and for each held or
-blocked one the program (like `rm`) and the rule. See [Usage sharing](#usage-sharing-asked-first).
+laptop or your server. What leaves is anonymous usage counts: the command name, version, OS, how many actions were
+allowed, held and blocked, and for each held or blocked one the program (like `rm`) and the rule. The first run in a
+terminal says so; `DO_NOT_TRACK=1` turns it off. See [Usage sharing](#usage-sharing).
 
 ### Does Squidbrake use an LLM to make decisions?
 
@@ -501,11 +541,14 @@ Here's what that means in practice:
   only when it runs (`$(...)`, `eval`), and a script the agent created in this conversation and then runs
   (`python cleanup.py` right after writing `cleanup.py`). A person reads it first.
 - **Held: the agent turning Squidbrake off.** `squidbrake connect --remove`, `service stop`, uninstalling it, killing
-  its process, or editing the agents' hook settings all wait for a person.
+  its process, editing the agents' hook settings or Squidbrake's installed files, or setting a lasting variable that
+  loosens it all wait for a person.
+- **Blocked: the agent approving itself.** Reading or writing Squidbrake's keys, link secret or database,
+  `squidbrake add-key`, or calling the approval API from its own tools.
 - **Not caught:**
-  - A script that was already in the project, edited and then run: `python scripts/seed.py` runs, and what it does
-    inside isn't seen (running the project's own scripts after a change is everyday work). Cursor reports new files
-    and edits the same way, so there a new script counts as written too.
+  - A script that was already in the project, edited and then run: `python scripts/seed.py` runs and is flagged for
+    the approver (`edited_then_run: warn`, because running the project's own scripts after a change is everyday work);
+    `edited_then_run: review` holds it. What it does inside isn't seen.
   - Programs that aren't common developer tools are recorded, not held (`command_checks.unknown: warn`; set it to
     `review` to hold them).
   - Tools that aren't connected (`squidbrake connect status` shows which are).
@@ -515,6 +558,9 @@ Here's what that means in practice:
     (only an admin on the machine can undo that).
 - **For a hostile agent,** add a sandbox (a container or a VM, with no credentials it doesn't need) underneath.
   Squidbrake then decides what is allowed, and the sandbox makes sure nothing goes around it.
+
+The full list, per agent and with the test behind each line, is in [THREAT_MODEL.md](THREAT_MODEL.md);
+`squidbrake doctor` shows what each agent's hook on your computer does and doesn't check.
 
 To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 
@@ -532,6 +578,8 @@ To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 | `GET /docs` | interactive OpenAPI docs |
 
 ## Evidence anyone can check
+
+`squidbrake audit verify` checks the record on this gateway end to end and names the first broken link, if any.
 
 Every decision is written to a hash-chained audit trail together with the fingerprint of the `rules.yaml` version
 that made it, and each version's text is kept. **Reports > Tamper check > Download evidence** (or
@@ -607,9 +655,10 @@ If you'd like the team to know who you are, `squidbrake register you@company.com
 - Every install, through the anonymous usage stats above.
 - A pilot joins with the code they were given: `squidbrake pilot join CODE --server URL` (asks first, default no).
 
-What is shared is usage **counts**: actions allowed, held, approved and blocked per day, and which agents and
-rules; for each action held or blocked, the program only (e.g. `rm`), the rule and sizes as numbers. Never
-commands, code, prompts or keys. Details: [`pilot.py`](pilot.py) and [`insights/`](insights/).
+What is shared is usage **counts**: actions allowed, held, approved and blocked per day, how many a person marked
+"this was legit", the gateway's decision time (p50 / p95 / p99 milliseconds), and which agents and rules; for each
+action held or blocked, the program only (e.g. `rm`), the rule and sizes as numbers. Never commands, code, prompts or
+keys. Details: [`pilot.py`](pilot.py) and [`insights/`](insights/).
 
 ## Roadmap
 
@@ -618,6 +667,9 @@ commands, code, prompts or keys. Details: [`pilot.py`](pilot.py) and [`insights/
   (admin roles, production, secrets). Stops an agent from giving itself admin in steps that each look harmless.
 - **An optional risk model that can only escalate** ([#16](https://github.com/batrapulkit/squidbrake/issues/16)): a second
   opinion that can hold an action, never allow one.
+- **Rule packs for chains**: a vendor's bank details changed, then a payment to that vendor (business email
+  compromise); refunds larger than the order, or to a destination changed just before. Installed with one command,
+  each with a test that catches the chain and one that holds nothing in its everyday variant.
 - **More agents connected in one command**: Cursor install ([#2](https://github.com/batrapulkit/squidbrake/issues/2)),
   more rule packs like the [GitHub, Stripe, Slack and Postgres ones](examples/rules/).
 
