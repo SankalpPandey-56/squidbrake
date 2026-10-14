@@ -8,7 +8,11 @@
 [![PyPI](https://img.shields.io/pypi/v/squidbrake.svg)](https://pypi.org/project/squidbrake/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
+[![MCP](https://img.shields.io/badge/MCP-compatible-8A2BE2.svg)](docs/install.md#2-connect-real-agents)
 [![Real incidents replayed: 13 of 14 stopped](https://img.shields.io/badge/real%20incidents%20replayed-13%20of%2014%20stopped-yellow.svg)](incidents/)
+[![Good first issues](https://img.shields.io/github/issues/batrapulkit/squidbrake/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/batrapulkit/squidbrake/labels/good%20first%20issue)
+
+<a href="https://www.producthunt.com/products/squidbrake?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&theme=light&t=1791704247916"></a>
 
 Your AI agents run commands, edit code, call MCP tools, send emails, issue refunds and change databases. Squidbrake
 sits between the agents and those actions:
@@ -22,7 +26,7 @@ Every decision goes into a tamper-evident record that someone outside engineerin
 One policy covers every agent your company runs: Claude Code, Cursor, Codex, Gemini CLI, VS Code Copilot,
 Antigravity, and any MCP tool. Free and open source (Apache 2.0). Runs on your laptop or your own server.
 
-![Demo: an agent's actions on the record; a refund waits for a person and is approved from a phone](https://raw.githubusercontent.com/batrapulkit/squidbrake/main/docs/demo.gif)
+![Demo: every agent action goes on the record; a refund waits for a person and is approved from a phone; the record shows who asked, who approved and what led to it](https://raw.githubusercontent.com/batrapulkit/squidbrake/main/docs/demo.gif)
 
 ## Why
 
@@ -58,6 +62,15 @@ steps that led to it.
   - "removes 3 commits from origin/main"
   - "deletes 4,312 rows of 10,240 in orders"
   - "destroys 12 resources, including aws_db_instance.main"
+
+![Squidbrake dashboard: a git push and a refund wait for approval, while a scam wire transfer was blocked](https://raw.githubusercontent.com/batrapulkit/squidbrake/main/docs/dashboard.png)
+
+<table><tr>
+<td width="62%"><img src="https://raw.githubusercontent.com/batrapulkit/squidbrake/main/docs/blocked-scam.png" alt="A $24,800 wire blocked because it follows an email from a look-alike domain"><br>
+<sub>An agent read an "urgent CEO" email from <code>acrne-corp.com</code> and tried to wire $24,800. Blocked, with the story of what led to it.</sub></td>
+<td width="38%"><img src="https://raw.githubusercontent.com/batrapulkit/squidbrake/main/docs/phone-approval.png" alt="One-tap approval on a phone"><br>
+<sub>Approve or reject from your phone with one tap.</sub></td>
+</tr></table>
 
 ## Quick start
 
@@ -99,7 +112,10 @@ Even in observe mode, three things are always enforced:
 - an emergency stop
 - an agent reaching for Squidbrake's own approval path
 
-No install? [Open the live demo in Codespaces](https://codespaces.new/batrapulkit/squidbrake?quickstart=1).
+No install? Open the live demo in your browser: a sandbox company's support agent works its inbox while you watch.
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/batrapulkit/squidbrake?quickstart=1)
+
 More ways to install: [docs/install.md](docs/install.md).
 First run not right? [docs/troubleshooting.md](docs/troubleshooting.md).
 
