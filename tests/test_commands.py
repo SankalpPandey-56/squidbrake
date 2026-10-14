@@ -65,6 +65,17 @@ def test_catastrophic(line):
     # found by bench/chains: publishing a file, backups off, infrastructure and production database changes
     "gh gist create deploy/keys.yaml --public", "gh gist create a.txt -p", "gh repo create x --public",
     "gh repo edit --visibility public",
+    "gh secret delete API_KEY", "gh api -X DELETE repos/o/r",
+    "gh api --method DELETE repos/o/r/git/refs/heads/x",
+    "gh api --method=DELETE repos/o/r", "gh api -XDELETE repos/o/r",
+    "gh api -X=DELETE repos/o/r",
+    "gh --repo org/repo secret delete API_KEY",
+    "gh -R org/repo pr merge 12 --admin",
+    "gh --repo=org/repo repo edit --visibility public",
+    "gh --hostname github.example.com api -X DELETE repos/o/r",
+    "gh pr merge 12 --admin", "gh pr merge 12 --admin=true",
+    "gh pr merge 12 --admin=1", "gh pr merge 12 --admin=T",
+    "gh repo edit --visibility=public",
     "aws rds modify-db-instance --db-instance-identifier prod-db --backup-retention-period 0 --apply-immediately",
     "aws rds modify-db-cluster --db-cluster-identifier c --no-deletion-protection",
     "aws s3api put-bucket-versioning --bucket b --versioning-configuration Status=Suspended",
@@ -294,3 +305,33 @@ def test_unknown_programs_are_named_not_held():
     r = commands.read("ls && frobnicate --all")
     assert r.unknown == ["frobnicate"] and r.kind == "other"
     assert commands.read("npm test && git status && cargo build").unknown == []
+
+
+@pytest.mark.parametrize("line", [
+    "gh pr view 12", "gh api repos/o/r", "gh secret list", "gh pr merge 12 --squash",
+    "gh api --method GET repos/o/r", "gh api --method=POST repos/o/r",
+    "gh api -X DELETE -X GET repos/o/r", "gh pr merge 12 --admin=false",
+    "gh pr merge 12 --admin --admin=false", "gh api repos/o/r -- --method DELETE",
+    "gh api repos/o/r -f --method=DELETE", "gh api repos/o/r -F --method=DELETE",
+    "gh api repos/o/r -H --method=DELETE",
+    "gh repo edit --visibility private --description public",
+    "gh repo edit --visibility private -- --visibility public",
+    "gh repo edit --description --visibility=public",
+    "gh repo edit --visibility public --visibility private",
+    "gh pr merge 12 --body --admin=true",
+    "gh secret delete API_KEY --help", "gh api -X DELETE repos/o/r --help",
+    "gh pr merge 12 --admin --help", "gh repo edit --visibility public --help",
+    "gh -R org/repo pr view 12", "gh --hostname example.invalid api repos/o/r",
+])
+def test_gh_harmless_lookalikes_keep_existing_classification(line):
+    assert kind(line) == "other"
+
+
+@pytest.mark.parametrize("line,reason", [
+    ("gh secret delete API_KEY", "deletes a GitHub secret"),
+    ("gh api -X DELETE repos/o/r", "GitHub API request that deletes data"),
+    ("gh pr merge 12 --admin", "bypass required checks"),
+    ("gh repo edit --visibility public", "makes a GitHub repository public"),
+])
+def test_gh_irreversible_reasons_describe_the_operation(line, reason):
+    assert reason in commands.read(line).summary()

@@ -343,6 +343,45 @@ def _remote_command(prog: str, words: list[str]) -> tuple[str, str] | None:
     return None
 
 
+def _gh_command(words: list[str]) -> list[str]:
+    i = 1
+    while i < len(words):
+        word = words[i]
+        if word in ("-R", "--repo", "--hostname"):
+            i += 2
+        elif word.startswith(("--repo=", "--hostname=")) or (word.startswith("-R") and len(word) > 2):
+            i += 1
+        else:
+            break
+    return words[i:]
+
+
+def _gh_option(words: list[str], flag: str, short: str = "", boolean: bool = False) -> str:
+    # Do not interpret option-looking payload values or arguments after -- as flags.
+    value_flags = {"-f", "-F", "--field", "--raw-field", "-H", "--header", "--input",
+                   "--hostname", "-q", "--jq", "-t", "--template", "-R", "--repo",
+                   "-d", "--description", "-b", "--body", "--subject", "--title", "--homepage"}
+    value, i = "", 0
+    while i < len(words) and words[i] != "--":
+        word = words[i]
+        if word == flag or (short and word == short):
+            if boolean:
+                value = "true"
+            elif i + 1 < len(words):
+                i += 1
+                value = words[i]
+        elif word.startswith(flag + "="):
+            value = word.split("=", 1)[1]
+        elif short and word.startswith(short) and len(word) > len(short):
+            value = word[len(short):]
+            if value.startswith("="):
+                value = value[1:]
+        elif word in value_flags:
+            i += 1
+        i += 1
+    return value.lower()
+
+
 def classify(words: list[str], raw: str = "", depth: int = 0) -> tuple[list[Command], list[str]]:
     """One simple command (already split into words). -> (commands, hidden-reasons)."""
     words = _strip_wrappers(words)
@@ -546,11 +585,28 @@ def classify(words: list[str], raw: str = "", depth: int = 0) -> tuple[list[Comm
             cmd.kind, cmd.why = "irreversible", "changes a production database (an SQL file or a write)"
         return [cmd], []
 
+    # ---- GitHub operations that delete data or override protections
+    if prog == "gh" and _gh_option(words[1:], "--help", "-h", boolean=True) not in ("true", "1", "t"):
+        gh_words = _gh_command(words)
+        gh_lower = [word.lower() for word in gh_words]
+        why = ""
+        if gh_lower[:2] == ["secret", "delete"]:
+            why = "deletes a GitHub secret"
+        elif gh_lower[:1] == ["api"] and _gh_option(gh_words[1:], "--method", "-X") == "delete":
+            why = "sends a GitHub API request that deletes data"
+        elif gh_lower[:2] == ["pr", "merge"] and _gh_option(gh_words[2:], "--admin", boolean=True) in ("true", "1", "t"):
+            why = "merges a pull request with administrator privileges, which can bypass required checks"
+        elif gh_lower[:2] == ["repo", "edit"] and _gh_option(gh_words[2:], "--visibility") == "public":
+            why = "makes a GitHub repository public"
+        if why:
+            cmd.kind, cmd.why = "irreversible", why
+            return [cmd], []
+
     # ---- publishing and machine state
     if (prog in ("npm", "pnpm", "yarn") and "publish" in lower[1:3]) or (prog == "cargo" and "publish" in lower[1:2]) \
             or (prog == "twine" and "upload" in lower[1:2]) or (prog == "gh" and lower[1:3] in (["repo", "delete"],
                                                                                               ["release", "delete"])) \
-            or (prog == "gh" and lower[1:3] in (["gist", "create"], ["repo", "create"], ["repo", "edit"])
+            or (prog == "gh" and lower[1:3] in (["gist", "create"], ["repo", "create"])
                 and ("--public" in lower or (lower[2] == "create" and lower[1] == "gist" and "-p" in lower)
                      or "--visibility=public" in lower
                      or ("--visibility" in lower and "public" in lower))):

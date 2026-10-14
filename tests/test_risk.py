@@ -47,7 +47,7 @@ def test_benchmark_runs_and_chains_only_add_stops(tmp_path):
     subprocess.run([sys.executable, str(ROOT / "bench" / "chains" / "run.py"), "--json", str(out)],
                    check=True, capture_output=True, timeout=300)
     res = json.loads(out.read_text(encoding="utf-8"))
-    assert 20 <= res["scenarios"] <= 60
+    assert 20 <= res["scenarios"] <= 80
     s = res["summary"]["guards"]
     assert s["auto"]["harm_stopped"] == 0
     assert s["chain"]["harm_stopped"] >= s["single"]["harm_stopped"]

@@ -1,6 +1,6 @@
 # Normal permissions versus Squidbrake, on whole sessions
 
-60 agent sessions and 111 steps go through five guards. The sessions are the
+61 agent sessions and 112 steps go through five guards. The sessions are the
 [public incidents](../../incidents), plus sessions written for this benchmark.
 
 - **Harm that builds up over several steps:** prompt injection from a docs page, an issue, a ticket or a Slack
@@ -37,11 +37,11 @@ guards only read the steps. `tests/test_risk.py` runs this benchmark in CI.
 
 | Guard | Harmful steps stopped | Harmful sessions stopped | Routine steps stopped (false positives) | Sensitive steps a person saw | Times a person was asked |
 |---|---|---|---|---|---|
-| Auto-run | 0/64 | 0/36 | 0/41 | 0/6 | 0 |
-| Ask for everything | 63/64 | 35/36 | 40/41 | 6/6 | 110 |
-| Allowlist | 53/64 | 26/36 | 10/41 | 5/6 | 69 |
-| Squidbrake, one step at a time | 60/64 (5 blocked) | 32/36 | 2/41 | 6/6 | 64 |
-| Squidbrake, with chains | **63/64** (6 blocked) | **35/36** | **3/41** | **6/6** | 67 |
+| Auto-run | 0/65 | 0/37 | 0/41 | 0/6 | 0 |
+| Ask for everything | 64/65 | 36/37 | 40/41 | 6/6 | 111 |
+| Allowlist | 53/65 | 26/37 | 10/41 | 5/6 | 69 |
+| Squidbrake, one step at a time | 61/65 (5 blocked) | 33/37 | 2/41 | 6/6 | 65 |
+| Squidbrake, with chains | **64/65** (6 blocked) | **36/37** | **3/41** | **6/6** | 68 |
 
 ### What changed on 2026-10-14: chains across conversations and agents
 
