@@ -2608,33 +2608,39 @@ def _integrity_inputs() -> tuple[Path, Path | None, dict[str, Path]]:
     return RULES_PATH, package, hooks
 
 
+_integrity_lock = threading.Lock()   # the minute check and `integrity accept` never interleave
+
+
 def check_integrity() -> list[dict]:
     """Compare with the copy kept the first time; a new change is recorded once and sent where approvals go."""
-    now = {**integrity.current(*_integrity_inputs()), "version": VERSION}
-    changes = integrity.compare(KEYS_PATH.parent, now)
-    if changes and all(c["kind"] == "rules" or (c["kind"] == "hooks" and c["change"] == "added") for c in changes):
-        integrity.accept(KEYS_PATH.parent, now)      # a person's edits, a newly connected agent: the new normal
-        with audited_tx() as conn:
-            audit(conn, "gateway", "integrity.noted", None, changes=changes)
-        changes = []
-    seen = state_get("integrity", {}).get("changes") or []
-    if changes != seen:
-        with audited_tx() as conn:
-            state_set(conn, "integrity", {"changes": changes, "at": utcnow()})
-            if changes:
-                audit(conn, "gateway", "integrity.changed", None, changes=changes)
-        if new := [c for c in changes if c not in seen]:
-            notify_text("Squidbrake: its own files changed", f"{integrity.describe(new)}. If you did this, run: "
-                        f"{CLI} integrity accept. If not, look at what your agents did just before.")
-            forwarder.emit({"type": "integrity_changed", "time": utcnow(), "changes": new})
+    with _integrity_lock:
+        now = {**integrity.current(*_integrity_inputs()), "version": VERSION}
+        changes = integrity.compare(KEYS_PATH.parent, now)
+        if changes and all(c["kind"] == "rules" or (c["kind"] == "hooks" and c["change"] == "added") for c in changes):
+            integrity.accept(KEYS_PATH.parent, now)      # a person's edits, a newly connected agent: the new normal
+            with audited_tx() as conn:
+                audit(conn, "gateway", "integrity.noted", None, changes=changes)
+            changes = []
+        seen = state_get("integrity", {}).get("changes") or []
+        new = [c for c in changes if c not in seen]
+        if changes != seen:
+            with audited_tx() as conn:
+                state_set(conn, "integrity", {"changes": changes, "at": utcnow()})
+                if changes:
+                    audit(conn, "gateway", "integrity.changed", None, changes=changes)
+    if new:
+        notify_text("Squidbrake: its own files changed", f"{integrity.describe(new)}. If you did this, run: "
+                    f"{CLI} integrity accept. If not, look at what your agents did just before.")
+        forwarder.emit({"type": "integrity_changed", "time": utcnow(), "changes": new})
     return changes
 
 
 def accept_integrity(who: str) -> None:
-    integrity.accept(KEYS_PATH.parent, {**integrity.current(*_integrity_inputs()), "version": VERSION})
-    with audited_tx() as conn:
-        state_set(conn, "integrity", {"changes": [], "at": utcnow()})
-        audit(conn, who, "integrity.accepted", None)
+    with _integrity_lock:
+        integrity.accept(KEYS_PATH.parent, {**integrity.current(*_integrity_inputs()), "version": VERSION})
+        with audited_tx() as conn:
+            state_set(conn, "integrity", {"changes": [], "at": utcnow()})
+            audit(conn, who, "integrity.accepted", None)
 
 
 def purge_expired_capabilities() -> None:
