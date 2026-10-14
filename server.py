@@ -69,6 +69,7 @@ import outbound
 import pilot
 import policy_edit
 import risk
+import integrity
 import selfguard
 import weekly
 import siem
@@ -822,6 +823,7 @@ COMMAND_DEFAULTS = {
     "hidden": "review",        # code that can't be read first: eval, curl | sh, base64 -d | bash, -EncodedCommand,
                                # inline programs (python -c, node -e, ...), a program named only when it runs
     "written_then_run": "review",  # runs a script the agent itself created in this conversation (read it first)
+    "edited_then_run": "warn",     # runs a script the agent changed in this conversation: flagged; review holds it
     "unknown": "warn",         # a program that isn't a common developer tool: recorded (shadow); "review" holds it
     "read_only": "off",        # "allow": commands that only look (ls, cat, grep, git status) run without asking
 }
@@ -989,7 +991,7 @@ class Policy:
         self.source, self.fingerprint = "", verify.rules_fingerprint("")
         self.mode, self.shadow_agents = "enforce", []
         self.upstreams: dict[str, str] = {}
-        self.when_unreachable, self.snapshots = "block", "required"
+        self.when_unreachable, self.snapshots, self.integrity = "block", "required", "alert"
         self.budgets: list[dict] = []
         self.proofs: list[dict] = []
 
@@ -1041,7 +1043,7 @@ class Policy:
                         raise ValueError(f"history_checks.{k} must be block, review, warn or off")
                 hc["company_domains"] = [d.lower().strip() for d in hc["company_domains"] or []]
                 cc = {**COMMAND_DEFAULTS, **(data.get("command_checks") or {})}
-                for k in (*COMMAND_EFFECT_KEYS, "written_then_run", "unknown"):
+                for k in (*COMMAND_EFFECT_KEYS, "written_then_run", "edited_then_run", "unknown"):
                     cc[k] = "off" if cc[k] is False else COMMAND_DEFAULTS[k] if cc[k] is True else str(cc[k]).lower()
                     if cc[k] not in ("block", "review", "warn", "off"):
                         raise ValueError(f"command_checks.{k} must be block, review, warn or off")
@@ -1069,10 +1071,14 @@ class Policy:
                     raise ValueError("mode must be enforce or observe (shadow)")
                 wu = data.get("when_unreachable", "block")
                 wu = "allow" if wu is True or str(wu).lower() == "allow" else \
-                    "block" if wu is False or str(wu).lower() in ("block", "deny") else None
+                    "block" if wu is False or str(wu).lower() in ("block", "deny") else \
+                    "block_risky" if str(wu).lower() == "block_risky" else None
                 if wu is None or any(str(r.get("when_unreachable", "block")).lower() not in ("allow", "block", "deny", "true", "false")
                                      for r in data.get("rules") or []):
-                    raise ValueError("when_unreachable must be block or allow")
+                    raise ValueError("when_unreachable must be block, block_risky or allow (a rule: block or allow)")
+                integ = str(data.get("integrity", "alert")).lower()
+                if integ not in ("alert", "fail_closed"):
+                    raise ValueError("integrity must be alert or fail_closed")
                 snaps = str(data.get("snapshots", "required")).lower() if data.get("snapshots") is not False else "off"
                 if snaps not in ("required", "best_effort", "off") or \
                         any(r["snapshot"] not in (None, "required", "best_effort", "off") for r in rules):
@@ -1085,7 +1091,7 @@ class Policy:
                 self.sequences, self.taint, self.data = sequences, tc, dc
                 self.source, self.fingerprint = source, verify.rules_fingerprint(source)
                 self.mode, self.shadow_agents = mode, shadow_agents
-                self.when_unreachable, self.snapshots = wu, snaps
+                self.when_unreachable, self.snapshots, self.integrity = wu, snaps, integ
                 self.budgets, self.proofs = budgets, proofs
                 self.default_reason = data.get("default_reason") or f"default {default}"
                 self.upstreams = {k: str(v).rstrip("/") for k, v in (data.get("upstreams") or {}).items()}
@@ -1571,14 +1577,15 @@ def command_signals(name: str, input: Any, metadata: dict | None = None) -> tupl
 
 
 WRITES_A_FILE = ("Write", "write_file", "create_file", "write_to_file", "Create", "fs_write")
+EDITS_A_FILE = ("Edit", "MultiEdit", "replace", "edit_file", "str_replace_editor", "str_replace_based_edit_tool")
 
 
 def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
-    """A script the agent created in this conversation, now run: `python x.py` is as unreadable to a shell reading
-    as `python -c`, so a person reads it first (command_checks.written_then_run). Edits to existing files aren't
-    counted: running the project's own tests and scripts after changing them is everyday work."""
+    """A script the agent created or changed in this conversation, now run directly (`python x.py`, `./x.sh`): as
+    unreadable to a shell reading as `python -c`, so a person reads it first (command_checks.written_then_run).
+    Running tests (`pytest`, `npm test`) after editing the code isn't a script run, so it isn't counted."""
     cc = policy.commands
-    if cc["written_then_run"] == "off" or not ev.session_id             or not any(fnmatch.fnmatchcase(ev.name.lower(), t.lower()) for t in cc["tools"]):
+    if (cc["written_then_run"] == "off" and cc["edited_then_run"] == "off") or not ev.session_id             or not any(fnmatch.fnmatchcase(ev.name.lower(), t.lower()) for t in cc["tools"]):
         return []
     line = commands.command_of(ev.input)
     scripts = commands.read(line).scripts if line else []
@@ -1589,9 +1596,10 @@ def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
     wanted = {norm(os.path.join(cwd, sp) if cwd and not os.path.isabs(sp) and not sp.startswith("~") else sp): sp
               for sp in scripts}
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+    names = (WRITES_A_FILE if cc["written_then_run"] != "off" else ()) +         (EDITS_A_FILE if cc["edited_then_run"] != "off" else ())
     rows = conn.execute(select(events.c.name, events.c.input).where(
         events.c.session_id == ev.session_id, events.c.created_at >= since, events.c.status.in_(("completed", "pending")),
-        events.c.name.in_(WRITES_A_FILE)).order_by(events.c.created_at.desc()).limit(200)).all()
+        events.c.name.in_(names)).order_by(events.c.created_at.desc()).limit(200)).all()
     for r in rows:
         try:
             inp = json.loads(r.input) if r.input else {}
@@ -1601,8 +1609,11 @@ def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
         hit = wanted.get(norm(path)) or next((sp for sp in scripts if not cwd and path and
                                               os.path.basename(path.replace("\\", "/")) == os.path.basename(sp)), None)
         if hit:
-            return [{"check": "written_then_run_command", "effect": cc["written_then_run"],
-                     "message": f"This command runs {hit}, a script the agent wrote in this conversation. Read it "
+            edited = r.name in EDITS_A_FILE
+            return [{"check": "edited_then_run_command" if edited else "written_then_run_command",
+                     "effect": cc["edited_then_run" if edited else "written_then_run"],
+                     "message": f"This command runs {hit}, a script the agent "
+                                f"{'changed' if edited else 'wrote'} in this conversation. Read it "
                                 f"before it runs: {path}"}]
     return []
 
@@ -1867,6 +1878,12 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
         would = decision
         reason = f"Shadow mode, allowed. Would have {'been blocked' if decision == 'deny' else 'waited for approval'}: {reason}"
         decision = "allow"
+    broken = state_get("integrity", {}).get("changes") if policy.integrity == "fail_closed" else None
+    if broken and not already_done and ev.kind != "prompt" and any(c["kind"] != "rules" for c in broken) and (
+            decision in ("deny", "review") or would or cannot_undo({"rule_id": rule_id, "signals": signals, "reason": reason})):
+        decision, would, rule_id = "deny", None, "integrity:fail-closed"
+        reason = (f"Squidbrake's own files changed ({integrity.describe(broken)}), so actions that wait for a person or "
+                  f"can't be undone are blocked until a person checks and runs: {CLI} integrity accept")
     already_ran = ev.error is not None or ev.output is not None
     if decision == "review" and already_ran:
         # A record-only event has already happened; there is nothing left to approve.
@@ -2478,6 +2495,49 @@ async def _expiry_loop():
         await asyncio.sleep(2)
 
 
+def _integrity_inputs() -> tuple[Path, Path | None, dict[str, Path]]:
+    """rules.yaml, the installed package (not a checkout), and the agents' hook configs when they're on this computer."""
+    package = BASE_DIR if (BASE_DIR / "__init__.py").exists() else None
+    hooks: dict[str, Path] = {}
+    if not (IN_DOCKER or PUBLIC_URL):
+        import connect
+        hooks = {"claude-code": connect.settings_path(None),
+                 **{n: t["file"] for n, t in connect.hook_agents().items() if t["present"]}}
+    return RULES_PATH, package, hooks
+
+
+def check_integrity() -> list[dict]:
+    """Compare with the copy kept the first time; a new change is recorded once and sent where approvals go."""
+    changes = integrity.compare(KEYS_PATH.parent, integrity.current(*_integrity_inputs()))
+    seen = state_get("integrity", {}).get("changes") or []
+    if changes != seen:
+        with audited_tx() as conn:
+            state_set(conn, "integrity", {"changes": changes, "at": utcnow()})
+            if changes:
+                audit(conn, "gateway", "integrity.changed", None, changes=changes)
+        if new := [c for c in changes if c not in seen]:
+            notify_text("Squidbrake: its own files changed", f"{integrity.describe(new)}. If you did this, run: "
+                        f"{CLI} integrity accept. If not, look at what your agents did just before.")
+            forwarder.emit({"type": "integrity_changed", "time": utcnow(), "changes": new})
+    return changes
+
+
+def accept_integrity(who: str) -> None:
+    integrity.accept(KEYS_PATH.parent, integrity.current(*_integrity_inputs()))
+    with audited_tx() as conn:
+        state_set(conn, "integrity", {"changes": [], "at": utcnow()})
+        audit(conn, who, "integrity.accepted", None)
+
+
+async def _integrity_loop():
+    while True:
+        try:
+            await run_in_threadpool(check_integrity)
+        except Exception:
+            log.exception("integrity check failed")
+        await asyncio.sleep(60)
+
+
 CAUGHT_ORDER = {"blocked": 0, "rejected": 1, "would have been blocked": 2, "would have waited for a person": 3}
 
 
@@ -2610,7 +2670,8 @@ async def lifespan(app: FastAPI):
     app.state.mcp_http = httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=None), follow_redirects=False)
     if servers := mcp_servers():
         await run_in_threadpool(hub.sync, servers)
-    tasks = [asyncio.create_task(_expiry_loop()), asyncio.create_task(_digest_loop()), asyncio.create_task(_s3_loop())]
+    tasks = [asyncio.create_task(_expiry_loop()), asyncio.create_task(_digest_loop()), asyncio.create_task(_s3_loop()),
+             asyncio.create_task(_integrity_loop())]
     if RETENTION_DAYS > 0:
         tasks.append(asyncio.create_task(_retention_loop()))
     # usage counts for the pilot programme: does nothing unless this install joined one (squidbrake pilot join)
@@ -3242,8 +3303,9 @@ def policy_offline(who: str = Depends(auth)):
     First matching rule wins, as on the gateway; `default` covers everything else."""
     policy._maybe_reload()
     return {"client": who, "default": policy.when_unreachable, "fingerprint": policy.fingerprint,
-            "rules": [{"id": r["id"], "match": r["match_spec"], "when_unreachable": r["when_unreachable"] or policy.when_unreachable}
-                      for r in policy.rules]}
+            "default_action": policy.default, "shell_tools": policy.commands["tools"],
+            "rules": [{"id": r["id"], "match": r["match_spec"], "action": r["action"],
+                       "when_unreachable": r["when_unreachable"] or policy.when_unreachable} for r in policy.rules]}
 
 
 # ---- spend brake
@@ -3470,7 +3532,8 @@ def build_report(days: int) -> dict:
             "shadow": {"mode": policy.mode, "agents": policy.shadow_agents,
                        "would_block": sum(a["would_block"] or 0 for a in agents),
                        "would_hold": sum(a["would_hold"] or 0 for a in agents)},
-            "audit": verify_audit_chain(), "week": weekly.build(engine, events, days)}
+            "audit": verify_audit_chain(), "week": weekly.build(engine, events, days),
+            "integrity": {"mode": policy.integrity, **state_get("integrity", {"changes": [], "at": None})}}
 
 
 CONTROL_CHANGES = ("team.", "settings.", "controls.", "policy.version")
@@ -3563,6 +3626,17 @@ def give_feedback(event_id: str, verdict: str, who: str) -> dict:
 @app.post("/v1/events/{event_id}/feedback")
 def post_feedback(event_id: str, body: FeedbackIn, who: str = Depends(person)):
     return give_feedback(event_id, body.verdict, who)
+
+
+@app.get("/v1/integrity")
+def get_integrity(_: str = Depends(person)):
+    return {"mode": policy.integrity, **state_get("integrity", {"changes": [], "at": None})}
+
+
+@app.post("/v1/integrity/accept")
+def post_integrity_accept(who: str = Depends(admin)):
+    accept_integrity(who)
+    return {"changes": []}
 
 
 @app.get("/v1/reports/week")
@@ -4402,6 +4476,11 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--days", type=int, default=7)
     rp.add_argument("--json", action="store_true", help="JSON instead of Markdown")
     rp.add_argument("--out", help="write it to this file")
+    ig = sub.add_parser("integrity", help="has anything changed Squidbrake's hooks, rules or installed files?")
+    ig.add_argument("action", nargs="?", choices=["status", "accept"], default="status",
+                    help="accept: the changes are yours, take them as the new normal")
+    au = sub.add_parser("audit", help="audit verify: check the tamper-evident record end to end")
+    au.add_argument("action", choices=["verify"])
     fb = sub.add_parser("feedback", help="say whether a hold or block was right: feedback EVENT_ID legit|right")
     fb.add_argument("event_id")
     fb.add_argument("verdict", choices=["legit", "right"])
@@ -4417,7 +4496,33 @@ def main(argv: list[str] | None = None) -> int:
     return {"run": _cli_run, "init": _cli_init, "resume": _cli_resume, "add-key": _cli_add_key, "remove-key": _cli_remove_key,
             "keys": _cli_keys, "verify": lambda a: verify.main([a.file]), "pilot": _cli_pilot,
             "evidence": _cli_evidence, "lockdown": _cli_lockdown, "explain": _cli_explain,
-            "report": _cli_report, "feedback": _cli_feedback}[args.cmd](args)
+            "report": _cli_report, "feedback": _cli_feedback, "integrity": _cli_integrity,
+            "audit": _cli_audit}[args.cmd](args)
+
+
+def _cli_integrity(args) -> int:
+    migrate(engine)
+    if args.action == "accept":
+        accept_integrity("command-line")
+        print("Accepted: the hooks, rules and installed files as they are now are the new normal.")
+        return 0
+    changes = check_integrity()
+    if not changes:
+        print("Intact: hooks, rules and installed files are as they were.")
+        return 0
+    print(f"Changed: {integrity.describe(changes)}.\nIf you did this, run: {CLI} integrity accept")
+    return 1
+
+
+def _cli_audit(args) -> int:
+    migrate(engine)
+    r = verify_audit_chain()
+    if r.get("ok"):
+        print(f"Intact: {r.get('entries')} entries, every link checks.")
+        return 0
+    where = f" The first broken link is entry #{r['first_bad_seq']}." if r.get("first_bad_seq") else ""
+    print(f"BROKEN: {r.get('message', 'the record was changed')}.{where}")
+    return 1
 
 
 def _cli_report(args) -> int:

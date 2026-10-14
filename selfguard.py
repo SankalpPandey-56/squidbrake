@@ -19,17 +19,17 @@ from pathlib import Path
 
 # Files in the gateway's data folder an agent must never read or write: who may approve, the secret that signs
 # approval links, the ledger key and the record itself.
-OWN_FILES = ("keys.json", "secret.key", "ledger.key", "gateway.db", "pilot.json")
+OWN_FILES = ("keys.json", "secret.key", "ledger.key", "gateway.db", "pilot.json", "integrity.json")
 
 # Commands that change who may approve, undo a person's stop, or mark a block as a false positive: a person runs
 # these, in their own terminal.
 KEY_ADMIN_RE = re.compile(
-    r"(?i)\b(squidbrake(\.exe)?|server\.py)[\"']?\s+(add-key|remove-key|init|resume|feedback)\b")
+    r"(?i)\b(squidbrake(\.exe)?|server\.py)[\"']?\s+(add-key|remove-key|init|resume|feedback|integrity)\b")
 
 # The approval API, reached from the agent's own tools (curl, fetch, a script): deciding, or lifting a stop. (The team
 # and settings endpoints need a person's key, which the checks here keep out of an agent's reach.)
 APPROVAL_API_RE = re.compile(
-    r"(?i)/v1/(a/[^/\s\"']+/(approve|reject|challenge)|events/[^/\s\"']+/(approve|reject|challenge|feedback)|controls/resume)\b")
+    r"(?i)/v1/(a/[^/\s\"']+/(approve|reject|challenge)|events/[^/\s\"']+/(approve|reject|challenge|feedback)|controls/resume|integrity/accept)\b")
 
 # Where browsers keep the dashboard's key (and every cookie): never everyday work for an agent.
 BROWSER_STORE_RE = re.compile(

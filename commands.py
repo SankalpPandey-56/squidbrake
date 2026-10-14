@@ -310,6 +310,39 @@ def _turns_off_squidbrake(prog: str, lower: list[str]) -> str | None:
     return None
 
 
+SSH_VALUE_FLAGS = set("BbcDEeFIiJLlmOoPpQRSWw")
+EXEC_VALUE_FLAGS = {"-e", "--env", "-u", "--user", "-w", "--workdir", "--env-file", "-c", "--container", "-n",
+                    "--namespace", "--context"}
+
+
+def _remote_command(prog: str, words: list[str]) -> tuple[str, str] | None:
+    """`ssh host 'cmd'`, `docker exec box cmd`, `kubectl exec pod -- cmd` -> (where, cmd), else None."""
+    lower = [w.lower() for w in words]
+    if prog == "ssh":
+        i = 1
+        while i < len(words) and words[i].startswith("-"):
+            flag = words[i]
+            i += 2 if len(flag) == 2 and flag[1] in SSH_VALUE_FLAGS else 1
+        if i + 1 < len(words):
+            return words[i], " ".join(_unquote(w) for w in words[i + 1:])
+        return None
+    if prog in ("docker", "podman", "nerdctl") and lower[1:2] == ["exec"]:
+        i = 2
+        while i < len(words) and words[i].startswith("-"):
+            i += 2 if words[i] in EXEC_VALUE_FLAGS else 1
+        if i + 1 < len(words):
+            return f"container {words[i]}", " ".join(_unquote(w) for w in words[i + 1:])
+        return None
+    if prog in ("kubectl", "oc", "k") and "exec" in lower[1:3] and "--" in words:
+        at = words.index("--")
+        if at + 1 < len(words):
+            rest = [w for i, w in enumerate(words[1:at], 1) if not w.startswith("-") and w.lower() != "exec"
+                    and words[i - 1] not in EXEC_VALUE_FLAGS]
+            pod = rest[0] if rest else "a pod"
+            return f"pod {pod}", " ".join(_unquote(w) for w in words[at + 1:])
+    return None
+
+
 def classify(words: list[str], raw: str = "", depth: int = 0) -> tuple[list[Command], list[str]]:
     """One simple command (already split into words). -> (commands, hidden-reasons)."""
     words = _strip_wrappers(words)
@@ -459,6 +492,14 @@ def classify(words: list[str], raw: str = "", depth: int = 0) -> tuple[list[Comm
     if prog == "pulumi" and any(w in ("up", "update") for w in lower[1:2]):
         cmd.kind, cmd.why = "irreversible", f"changes real infrastructure ({' '.join(words[:2])})"
         return [cmd], []
+    # ---- a command sent to another machine or container: read that command too
+    if (remote := _remote_command(prog, words)) is not None and depth < 4:
+        where, line = remote
+        inner, hidden = _read(line, depth + 1)
+        for c in inner:
+            if c.kind != "other" and c.why:
+                c.why = f"{c.why}, on {where}"
+        return [cmd, *inner], hidden
     if prog in ("kubectl", "oc", "k"):
         sub = [w for w in lower[1:] if not w.startswith("-")][:3]      # may include a flag's value (-n prod)
         if any(w in ("delete", "drain") for w in sub) or ("scale" in sub and "--replicas=0" in lower):

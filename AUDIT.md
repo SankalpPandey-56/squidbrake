@@ -18,6 +18,19 @@ purpose, and the day a fix makes it pass, CI goes red until the mark is removed.
 
 Because 4 and 6 are FALSE they jump the queue: the self-approval fix (Phase 2) goes first, then Phase 5.
 
+**Status after Phases 1 to 3** (branch `audit-and-hardening`): 751 tests pass, and 3 gaps are still open as strict
+xfails.
+
+| # | Now |
+|---|---|
+| 4 Self-approval | **Fixed** (`selfguard.py`, `tests/test_approval_integrity.py`) |
+| 5 Self-modification | **Fixed** for the package, reinstalls, lasting variables and a gateway with auth off |
+| 3 Bypass | `ssh` / `docker exec` / `kubectl exec` are read now. A script the agent changed and then runs is flagged, and held with `edited_then_run: review`. The rest is in `THREAT_MODEL.md` |
+| 7 Latency | Recorded per action (`decision_ms`) and in `squidbrake report --week`. The hook's ~400 ms start-up is not fixed |
+| 2 Chains | Still open: counts across agents, and injection across conversations |
+| 6 AWS reach | Still open |
+| 8 False positives | `squidbrake feedback ID legit` gives real numbers once pilots use it. `bench/chains` still holds 3 of 41 routine steps |
+
 ## 1. Benchmark claim: PARTIAL
 
 - `python incidents/replay.py` (the CI test `tests/test_incidents.py`): **12 of 13 harmful actions stopped across 10

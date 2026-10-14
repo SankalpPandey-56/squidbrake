@@ -13,7 +13,8 @@ from sqlalchemy import select
 
 # Findings that come from what happened before the action, not the action alone: these are the chains.
 CHAIN_CHECKS = ("sequence", "untrusted_destination", "impersonation", "payment_request_in_message",
-                "repeat_of_rejected", "written_then_run_command", "duplicate_change")
+                "repeat_of_rejected", "written_then_run_command", "edited_then_run_command",
+                "duplicate_change")
 
 
 def percentiles(values: list[float]) -> dict:

@@ -1961,7 +1961,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
   const SIGNAL_TITLES = { effect: "What it changes",
     impersonation: "Possible scam", payment_request_in_message: "Payment requested in a message",
     repeat_of_rejected: "Already rejected before", duplicate_change: "Done before",
-    catastrophic_command: "Destructive command", irreversible_command: "Can't be undone", hidden_command: "Hidden code", sequence: "Pattern", untrusted_destination: "Address from outside content", after_untrusted: "After reading outside content",
+    catastrophic_command: "Destructive command", irreversible_command: "Can't be undone", hidden_command: "Hidden code", written_then_run_command: "Script written, then run", edited_then_run_command: "Script changed, then run", sequence: "Pattern", untrusted_destination: "Address from outside content", after_untrusted: "After reading outside content",
   };
   // The AI brief: advice for the person deciding, written with the team's own key. Never part of the decision.
   function briefEl(e) {
@@ -2376,6 +2376,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
         tile("False positives", r.week.false_positives.rate == null ? "—" : `${(r.week.false_positives.rate * 100).toFixed(1)}%`,
              `${r.week.false_positives.legit} of ${r.week.false_positives.stopped} marked "this was legit"`)] : []));
     const au = r.audit;
+    const ig = r.integrity && r.integrity.changes && r.integrity.changes.length ? r.integrity : null;
     $("#auditCard").replaceChildren(el("div", { class: "card-head" }, el("h2", { text: "Tamper check" }),
         el("button", { class: "linkish", text: "Re-check now", onclick: loadReports })),
       el("div", { class: "audit-ok " + (au.ok ? "ok" : "bad") }, el("div", { class: "big", text: au.ok ? "✓" : "!" }),
@@ -2384,6 +2385,9 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
           el("div", { class: "sec", text: `${nf.format(au.entries)} entries. ${au.message}.` }),
           el("div", { class: "muted", style: "margin-top:6px;font-size:12.5px", text: "Each entry is chained to the one before by a fingerprint, so any edit or deletion shows up here. Keep this fingerprint to prove later that today's history hasn't changed:" }),
           el("div", { class: "fp", text: au.head_hash || "—" }),
+          ig ? el("div", { class: "sec", style: "margin-top:8px;color:var(--bad, #b91c1c)",
+            text: `Squidbrake's own files changed: ${ig.changes.slice(0, 5).map((c) => `${c.what} ${c.change}`).join("; ")}. ` +
+                  `If you did this, run: squidbrake integrity accept.` + (ig.mode === "fail_closed" ? " Until then, risky actions are blocked." : "") }) : null,
           au.checkpoints ? el("div", { class: "sec", style: "margin-top:8px", text: au.checkpoints.count
             ? `${au.checkpoints.ok ? "✓" : "✕"} ${au.checkpoints.message}. Signed every 50 entries with this gateway's ledger key (public key: GET /v1/audit/public-key), so an export can be proven unedited.`
             : "Signed checkpoints start at entry 50." }) : null,
@@ -2495,7 +2499,10 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
       };
       return el("label", { class: "toggle-row", style: "display:flex;align-items:center;gap:10px;padding:6px 0" }, sw,
         el("b", { text: a.label }),
-        el("span", { class: "hint", text: a.connected ? "goes through Squidbrake" : a.present ? "not connected" : "not installed here" }));
+        el("span", { class: "hint", text: a.connected ? "goes through Squidbrake" : a.present ? "not connected" : "not installed here",
+          title: a.connected && a.checks ? `Checks: ${a.checks}. Not checked: ${a.not_checked}` : "" }),
+        a.connected && a.not_checked && a.not_checked !== "nothing known"
+          ? el("span", { class: "hint", text: `not checked: ${a.not_checked}` }) : null);
     }));
   }
   async function loadAgentsHere() {

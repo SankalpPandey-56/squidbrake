@@ -61,8 +61,10 @@ prompts, the audit trail) never leaves it; only anonymous usage counts go out (s
 - **Judges by history:** blocks a retry of something a person rejected, catches look-alike domains
   (`acrne-corp.com` pretending to be `acme.com`), flags duplicate refunds, and lets you write sequence rules
   ("deleting a database right after its backups were turned off") that say which earlier step caused them.
-- **Fails closed, rule by rule:** if Squidbrake is down, guarded tools don't run, unless a rule says
-  `when_unreachable: allow` for its actions (agents keep a copy of those answers).
+- **Fails closed for what matters:** if Squidbrake is down, anything that would wait for a person or be blocked, and
+  any command that can't be undone, doesn't run; what the rules already let run on its own (reads, everyday coding
+  work) carries on, unrecorded (`when_unreachable: block_risky`; `block` stops everything). Agents keep a copy of
+  these answers. What it can't stop: [THREAT_MODEL.md](THREAT_MODEL.md).
 
 See [SHOWCASE.md](SHOWCASE.md) for a 5-minute demo with a sandbox company, and [incidents/](incidents/) for **10 real
 AI-agent incidents replayed against the shipped rules** (Replit, the Railway volume deletion, GitHub MCP, Supabase

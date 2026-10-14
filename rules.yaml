@@ -43,10 +43,20 @@ default_reason: This changes something, so a person has to approve it
 mode: enforce
 shadow_agents: []          # shadow mode for just these agents (source or key names, globs), e.g. ["new-bot*"]
 
-# While Squidbrake can't be reached: block (the default) or allow. Each rule can say its own with
-# `when_unreachable: allow` (e.g. reads). Agents keep a copy of these answers, so they follow them while it's down.
-# What runs while it's down isn't recorded, so allow only what you'd accept unrecorded.
-when_unreachable: block
+# While Squidbrake can't be reached:
+#   block_risky  what these rules let run on its own (reads, everyday coding work) still runs; anything that would
+#                wait for a person or be blocked, and commands that can't be undone or can't be read, are blocked
+#   block        everything is blocked (the safest; agents stop working until Squidbrake is back)
+#   allow        everything runs
+# Each rule can say its own with `when_unreachable: allow | block`. Agents keep a copy of these answers, so they
+# follow them while it's down. What runs while it's down isn't recorded: the tradeoff is in THREAT_MODEL.md.
+when_unreachable: block_risky
+
+# Squidbrake checks every minute that its hooks in each agent, this file and its installed program haven't changed.
+#   alert        a change is recorded and sent wherever approvals go
+#   fail_closed  also: until a person runs `squidbrake integrity accept`, actions that would wait for a person or
+#                can't be undone are blocked (a change to this file alone only alerts)
+integrity: alert
 
 # Undo copies: before an action that waits for a person, or a command that can't be undone, keep a copy of what it
 # changes (files and git changes on the agent's computer, the record behind an API call through /proxy, or what a
@@ -102,6 +112,9 @@ command_checks:
   hidden: review          # code that can't be read first: eval, curl ... | sh, base64 -d | bash, powershell -EncodedCommand,
                           # programs written inline (python -c, node -e, perl -e), a program named only when it runs
   written_then_run: review  # a script the agent created in this conversation, then runs (python x.py): read it first
+  edited_then_run: warn     # a script the agent changed in this conversation, then runs: flagged for you to see;
+                            # review holds it (safer: an edit can hide anything, but fixing a script and running it
+                            # is everyday work)
   unknown: warn           # a program that isn't a common developer tool: recorded so you can see what would wait;
                           # review holds them too
   read_only: allow        # commands that only look (ls, cat, grep, git status/log/diff) run without asking,

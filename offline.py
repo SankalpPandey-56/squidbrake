@@ -4,6 +4,8 @@ default block), and the agent's computer keeps a copy of those answers so it can
 
   rules.yaml
     when_unreachable: block          # everything not listed below: blocked while the gateway is down (the default)
+                                     # block_risky: what the rules allow still runs; anything that would wait for a
+                                     # person or be blocked, and commands that can't be undone, are blocked
     rules:
       - id: reads
         action: allow
@@ -140,12 +142,40 @@ def decide(url: str, *, name: str, kind: str = "tool_call", source: str | None =
     pol = load(url)
     if not pol:
         return False, "no copy of the rules' offline settings on this computer yet, so it was blocked"
+    try:   # Squidbrake's own keys and approval path stay out of reach while it's down too
+        import selfguard
+        if (hit := selfguard.check(kind, name, input, None, _home() / "data")) is not None:
+            return False, hit["message"]
+    except ImportError:
+        pass
     values = {"kind": kind, "name": name, "source": source, "client": pol.get("client"), "session_id": session_id}
     for rule in pol.get("rules") or []:
         if matches(rule, values, input):
-            if rule.get("when_unreachable") == "allow":
+            wu = rule.get("when_unreachable")
+            if wu == "allow":
                 return True, f"rule '{rule.get('id')}' says when_unreachable: allow, so it ran unrecorded"
+            if wu == "block_risky":
+                return _risky(pol, rule.get("action"), f"rule '{rule.get('id')}'", name, input)
             return False, f"rule '{rule.get('id')}' says to block it while Squidbrake is unreachable"
     if pol.get("default") == "allow":
         return True, "the rules say when_unreachable: allow, so it ran unrecorded"
+    if pol.get("default") == "block_risky":
+        return _risky(pol, pol.get("default_action"), "the default", name, input)
     return False, "the rules block everything while Squidbrake is unreachable (when_unreachable: block)"
+
+
+def _risky(pol: dict, action: str | None, which: str, name: str, input: Any) -> tuple[bool, str]:
+    """when_unreachable: block_risky: what the rules let run without a person still runs (unrecorded); anything that
+    would wait for a person, be blocked, or is a command that can't be undone (or can't be read) is blocked."""
+    if action != "allow":
+        return False, f"{which} would {'block it' if action == 'deny' else 'ask a person'}, and Squidbrake is unreachable"
+    if any(fnmatch.fnmatchcase(name.lower(), t.lower()) for t in pol.get("shell_tools") or []):
+        try:
+            import commands
+            line = commands.command_of(input)
+            kind = commands.read(line).kind if line else "other"
+        except Exception:
+            kind = "hidden"                     # can't read it: treat it as risky
+        if kind in ("catastrophic", "irreversible", "hidden"):
+            return False, f"this command is {kind} and Squidbrake is unreachable, so it was blocked"
+    return True, f"{which} allows it and it isn't risky (when_unreachable: block_risky), so it ran unrecorded"
