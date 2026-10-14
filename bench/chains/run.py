@@ -87,6 +87,7 @@ def squidbrake(client, server, scenario: dict, chains: bool, latencies: list[flo
         if not chains:
             with server.engine.begin() as conn:
                 conn.execute(server.events.delete())
+                conn.execute(server.capabilities.delete())
             session = f"bench-{scenario['id']}-{i}-{time.time_ns()}"
         if "prompt" in step:
             body = {"name": "user.prompt", "kind": "prompt", "input": {"prompt": step["prompt"]}, "output": {"recorded": True}}
@@ -96,7 +97,10 @@ def squidbrake(client, server, scenario: dict, chains: bool, latencies: list[flo
                 body["output"] = step["output"]
             if step["tool"] in ("Bash", "PowerShell") and (found := runs.expand(inp["command"], str(workdir))):
                 body["metadata"] = {"runs": found}
-        d, ms = post(client, {**body, "session_id": session, "source": f"bench:{scenario['id']}"})
+        # a step can belong to a later conversation, or another agent, of the same person
+        conv = f"{session}-{step['conversation']}" if step.get("conversation") else session
+        agent = f"bench:{scenario['id']}" + (f":{step['agent']}" if step.get("agent") else "")
+        d, ms = post(client, {**body, "session_id": conv, "source": agent})
         if not judged:
             continue
         latencies.append(ms)

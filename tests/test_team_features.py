@@ -28,7 +28,10 @@ def post(c, name, inp, **kw):
 def shipped(monkeypatch, tmp_path):
     """The shipped rules, in a copy the test may edit."""
     path = tmp_path / "rules.yaml"
-    shutil.copy(ROOT / "rules.yaml", path)
+    # every test here is one person's agents (one identity): count refunds per agent, not across the whole test run
+    path.write_text((ROOT / "rules.yaml").read_text(encoding="utf-8").replace(
+        "count: { more_than: 10, within_hours: 1, scope: identity }", "count: { more_than: 10, within_hours: 1, scope: agent }"),
+        encoding="utf-8")
     monkeypatch.setattr(server, "policy", server.Policy(path))
     server.policy._maybe_reload()
     return path

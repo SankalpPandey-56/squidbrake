@@ -128,6 +128,7 @@ taint_checks:
   untrusted_destination: review   # sends to an address/URL/account found only in outside content
   after_untrusted: warn           # sends anything out after outside content was read in this conversation
   lookback_hours: 24
+  scope: identity                 # outside content read in one conversation still counts in the next (or: session)
   # untrusted: [...]  tools whose results are outside content (defaults: WebFetch, *fetch*, *inbox*, *issue*, *ticket* ...)
   # sinks: [...]      tools that send things out (defaults: *send*, *reply*, *publish*, *transfer*, *webhook*, *upload* ...)
   #                   Shell commands count as sinks when they upload (curl -d, scp, git push, ...).
@@ -143,9 +144,12 @@ data_checks:
 # Sequence rules judge an action by what came BEFORE it, and say which earlier step caused it.
 #   match   this action (same fields as rules: name, source, input_regex, input, ...)
 #   after   an earlier step that went ahead, within within_hours (default 24);
-#           scope: session (the same conversation, the default) | agent (any conversation of this agent) | all (any agent);
+#           scope: session (the same conversation, the default) | agent (any conversation of this agent) |
+#                  identity (any conversation of any agent working for the same person: on your own computer, all of
+#                  them; on a team gateway, the agents whose key "works for" that person) | all (any agent);
+#           the step is remembered until within_hours runs out, across restarts (`squidbrake capabilities` lists them);
 #           same_target: true = only if it was on the same thing (same charge, file, account ...)
-#   count   more than `more_than` earlier matching actions within within_hours; scope: session | agent | all;
+#   count   more than `more_than` earlier matching actions within within_hours; scope: session | agent | identity | all;
 #           sum: <field> = add up that input field (this action plus earlier ones) instead of counting actions
 #             (missing or non-numeric values count as 0); same_target: true = only earlier actions on the same thing
 #   action  deny | review | warn
@@ -165,7 +169,7 @@ sequences:
     action: deny
     reason: Too many refunds in a short time; the agent may be stuck in a loop
     match: { name: ["*refund*"] }
-    count: { more_than: 10, within_hours: 1, scope: agent }
+    count: { more_than: 10, within_hours: 1, scope: identity }   # a loop split across two agents still counts
 
   - id: mass-deletes
     action: review

