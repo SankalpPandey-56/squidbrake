@@ -22,7 +22,7 @@ docker run --rm squidbrake-compare
 |---|---|---|---|
 | [destructive_command_guard](https://github.com/Dicklesworthstone/destructive_command_guard) (dcg) | v0.15.2 release binary, sha256 checked | `dcg` with the hook event on stdin | its defaults (no config), then every pack category enabled |
 | [Microsoft Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit), Claude Code plugin (AGT) | commit `c3e8229` | `hooks/pre-tool-use.mjs` with the hook event on stdin | the plugin's `config/default-policy.json` |
-| Squidbrake | 0.3.12 | the gateway with the shipped `rules.yaml` (the engine `incidents/replay.py` runs in CI) | defaults |
+| Squidbrake | 0.3.12 (not rerun since; the same steps run in CI through `incidents/`) | the gateway with the shipped `rules.yaml` (the engine `incidents/replay.py` runs in CI) | defaults |
 
 ## Results (2026-10-03)
 
@@ -62,7 +62,8 @@ docker run --rm squidbrake-compare
   checks. It blocked deleting `node_modules` and `dist`.
 - **AGT's default policy** stops all 12, because it sends every shell command, edit and MCP call to a person for
   approval. That includes all six everyday changes. Only reads run on their own.
-- **Squidbrake** blocked or held all 12, and let the everyday work run.
+- **Squidbrake** blocked or held all 12 steps and let the everyday work run. That is **11 of the 12 harms stopped**:
+  holding the Postmark send doesn't stop the hidden BCC (below), the same miss `incidents/` counts in its 12 of 13.
 - **Nobody stops the postmark BCC.** The visible send is held, but the extra recipient is added inside the MCP
   server, after the call any of these guards can see. See [`incidents/`](../../incidents).
 
