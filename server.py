@@ -2610,7 +2610,13 @@ def _integrity_inputs() -> tuple[Path, Path | None, dict[str, Path]]:
 
 def check_integrity() -> list[dict]:
     """Compare with the copy kept the first time; a new change is recorded once and sent where approvals go."""
-    changes = integrity.compare(KEYS_PATH.parent, integrity.current(*_integrity_inputs()))
+    now = {**integrity.current(*_integrity_inputs()), "version": VERSION}
+    changes = integrity.compare(KEYS_PATH.parent, now)
+    if changes and all(c["kind"] == "rules" or (c["kind"] == "hooks" and c["change"] == "added") for c in changes):
+        integrity.accept(KEYS_PATH.parent, now)      # a person's edits, a newly connected agent: the new normal
+        with audited_tx() as conn:
+            audit(conn, "gateway", "integrity.noted", None, changes=changes)
+        changes = []
     seen = state_get("integrity", {}).get("changes") or []
     if changes != seen:
         with audited_tx() as conn:
@@ -2625,7 +2631,7 @@ def check_integrity() -> list[dict]:
 
 
 def accept_integrity(who: str) -> None:
-    integrity.accept(KEYS_PATH.parent, integrity.current(*_integrity_inputs()))
+    integrity.accept(KEYS_PATH.parent, {**integrity.current(*_integrity_inputs()), "version": VERSION})
     with audited_tx() as conn:
         state_set(conn, "integrity", {"changes": [], "at": utcnow()})
         audit(conn, who, "integrity.accepted", None)

@@ -4,7 +4,10 @@ made the first time (data/integrity.json):
 
   hooks      Squidbrake's own hook lines in each agent's config (other settings in those files may change freely)
   package    the installed program's files (a pip / uv / pipx install; a checkout being worked on isn't checked)
-  rules      rules.yaml (a person edits it, so this only alerts; the policy history keeps every version anyway)
+  rules      rules.yaml (a person edits it, so this is only recorded; the policy history keeps every version anyway)
+
+Not alerts, only recorded and taken as the new normal: an agent newly connected (its hook added), an upgrade (the
+version changed, so the package's files did too), and rules.yaml edits.
 
 A change is put on the record (integrity.changed), sent wherever approvals go, and, with rules.yaml
 `integrity: fail_closed`, actions that can't be undone are blocked until a person runs `squidbrake integrity accept`.
@@ -31,7 +34,8 @@ def hook_lines(path: Path) -> str | None:
         return None
     except (OSError, ValueError):
         return "unreadable"
-    return _sha("\n".join(sorted(connect._hook_commands(data))).encode())
+    ours = connect._hook_commands(data)
+    return _sha("\n".join(sorted(ours)).encode()) if ours else None    # no hook of ours: like no file
 
 
 def current(rules: Path, package: Path | None, hooks: dict[str, Path]) -> dict[str, dict[str, str | None]]:
@@ -58,7 +62,10 @@ def compare(data_dir: Path, now: dict) -> list[dict]:
         accept(data_dir, now)
         return []
     out = []
+    upgraded = was.get("version") != now.get("version")      # a new release replaces the package's files
     for kind in ("hooks", "package", "rules"):
+        if kind == "package" and upgraded:
+            continue
         before, after = was.get(kind) or {}, now.get(kind) or {}
         for what in sorted(set(before) | set(after)):
             if before.get(what) != after.get(what):

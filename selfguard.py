@@ -33,7 +33,7 @@ APPROVAL_API_RE = re.compile(
 
 # Where browsers keep the dashboard's key (and every cookie): never everyday work for an agent.
 BROWSER_STORE_RE = re.compile(
-    r"(?i)(Google[\\/]+Chrome|Microsoft[\\/]+Edge|BraveSoftware|Chromium|Vivaldi|Opera Software)[\\/]+.*"
+    r"(?i)(Google[\\/]+Chrome|Microsoft[\\/]+Edge|BraveSoftware|Chromium|Vivaldi|Opera Software)[\\/]+[^\n\"']*"
     r"(User Data|Default|Profile)|\.mozilla[\\/]+firefox|Firefox[\\/]+Profiles|Library[\\/]+Safari|"
     r"Local Storage[\\/]+leveldb|\.config[\\/]+(google-chrome|chromium|BraveSoftware)")
 
@@ -82,7 +82,11 @@ def check(kind: str | None, name: str, input, metadata: dict | None, data_dir: P
     """-> {"check": "approval" | "tamper", "effect": "block" | "review", "message"} or None."""
     if kind == "prompt":
         return None
-    texts = _strings(input)
+    # A command, or a file tool's path: never the text being written, so editing docs or tests that mention
+    # `squidbrake add-key` is everyday work. Other tools (MCP, web): every string, e.g. a URL or a request body.
+    shown = [input[k] for k in ("command", "cmd", "file_path", "path", "notebook_path", "url")
+             if isinstance(input, dict) and k in input]
+    texts = _strings(shown or input)
     if not texts:
         return None
     cwd = str((metadata or {}).get("cwd") or "")

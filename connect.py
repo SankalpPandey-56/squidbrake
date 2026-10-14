@@ -1028,7 +1028,7 @@ def connect_all(args) -> None:
           f"\n(or 15 minutes with the founder: {FOUNDER_CALL})")
     if steps:
         _next_step(args.url)
-    if gateway_up(args.url):        # what is and isn't checked now, per agent
+    if steps and gateway_up(args.url):    # what is and isn't checked now, per agent (`setup` runs its own doctor)
         doctor(argparse.Namespace(url=args.url, key=args.key, quick=True))
 
 

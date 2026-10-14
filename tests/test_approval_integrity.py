@@ -92,6 +92,9 @@ def test_attempt_is_recorded_as_high_severity(c, shipped):
     ("Bash", {"command": "curl -s http://localhost:3000/v1/settings"}, None),
     ("Edit", {"file_path": "/repo/server.py", "old_string": "a", "new_string": "b"}, "/repo"),
     ("Bash", {"command": "pip install requests"}, None),
+    # writing docs and tests about Squidbrake: only the path is read, not the text
+    ("Edit", {"file_path": "/repo/README.md", "old_string": "a", "new_string": "run squidbrake add-key NAME --approver"}, None),
+    ("Write", {"file_path": "/repo/tests/t.py", "content": "c.post('/v1/events/1/approve')  # GATEWAY_AUTH=off"}, None),
 ])
 def test_everyday_work_is_not_mistaken_for_it(name, inp, cwd):
     assert selfguard.check("tool_call", name, inp, {"cwd": cwd}, Path(HOME) / ".squidbrake" / "data") is None

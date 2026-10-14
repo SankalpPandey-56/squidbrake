@@ -35,7 +35,7 @@ def machine(tmp_path, monkeypatch):
     return {"hook": hook, "rules": rules, "pkg": pkg, "data": data}
 
 
-def test_integrity_sees_our_hook_removed_but_not_other_settings(machine):
+def test_integrity_sees_our_hook_removed_but_not_other_settings(machine, monkeypatch):
     assert server.check_integrity() == []                         # first look: kept as the normal
     data = json.loads(machine["hook"].read_text())
     data["permissions"]["allow"].append("Bash(ls)")               # the person's own settings: not our business
@@ -45,9 +45,16 @@ def test_integrity_sees_our_hook_removed_but_not_other_settings(machine):
     machine["hook"].write_text(json.dumps(data))
     (machine["pkg"] / "server.py").write_text("print('patched')\n")
     changes = server.check_integrity()
-    assert {(c["kind"], c["change"]) for c in changes} == {("hooks", "changed"), ("package", "changed")}
+    assert {(c["kind"], c["change"]) for c in changes} == {("hooks", "removed"), ("package", "changed")}
     assert server.state_get("integrity")["changes"] == changes
     server.accept_integrity("tester")
+    assert server.check_integrity() == []
+    machine["rules"].write_text("default: review\n")            # a person's own edit: recorded, not an alert
+    data["hooks"] = {"PreToolUse": [{"hooks": [{"type": "command", "command": "python /x/agent_hook.py cursor"}]}]}
+    machine["hook"].write_text(json.dumps(data))                # an agent connected again: fine
+    assert server.check_integrity() == []
+    monkeypatch.setattr(server, "VERSION", "99.0.0")             # an upgrade replaces the package's files
+    (machine["pkg"] / "server.py").write_text("print('new release')\n")
     assert server.check_integrity() == []
 
 
