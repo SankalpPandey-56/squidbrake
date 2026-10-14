@@ -99,13 +99,10 @@ td.num { font-variant-numeric:tabular-nums; }
 .spark i { display:block; width:6px; background:var(--ink); opacity:.55; border-radius:1px; min-height:1px; }
 
 tr.catches > td { padding:0 14px 12px; }
-#stopped tr.hold { display:none; }
-#stopped.show-all tr.hold { display:table-row; }
-#stopped.show-all .stopped-none { display:none; }
-tr.catches summary { cursor:pointer; font-size:12.5px; color:var(--muted); padding:2px 0 6px; list-style:none; }
-tr.catches summary::before { content:"\25B8"; display:inline-block; width:14px; transition:transform .15s; }
-tr.catches details[open] summary::before { transform:rotate(90deg); }
-tr.catches summary:hover { color:var(--ink); }
+tr.catches > td > details > summary { cursor:pointer; font-size:12.5px; color:var(--muted); padding:2px 0 6px; list-style:none; }
+tr.catches > td > details > summary::before { content:"\25B8"; display:inline-block; width:14px; transition:transform .15s; }
+tr.catches > td > details[open] > summary::before { transform:rotate(90deg); }
+tr.catches > td > details > summary:hover { color:var(--ink); }
 table.inner { min-width:0; font-size:13px; border:1px solid var(--line-2); border-radius:8px; border-collapse:separate; border-spacing:0; }
 table.inner th, table.inner td { padding:7px 12px; border:0; } table.inner th { background:var(--line-2); text-transform:none; letter-spacing:0; font-size:12px; }
 table.inner tbody tr td { border-top:1px solid var(--line-2); }
@@ -293,6 +290,62 @@ th { background:color-mix(in srgb, var(--line-2) 60%, transparent); }
 .ind-head h1 { font:500 30px/1.1 var(--serif); letter-spacing:-.015em; margin:0; }
 .ind-head .sub { font-size:14px; }
 
+/* held or blocked actions: one line each (when, what happened, the program, why, what it would have changed);
+   open a line for the rule, the agent, the tool and how long the person took */
+.lg-list { min-width:0; }
+.lg { border-top:1px solid var(--line-2); }
+.lg:first-child { border-top:0; }
+.lg summary { list-style:none; display:grid; grid-template-columns:112px 96px minmax(0, 1.1fr) minmax(0, 1.5fr) minmax(0, 1fr) 16px;
+              gap:12px; align-items:center; padding:9px 14px; cursor:pointer; font-size:13px; }
+.lg summary::-webkit-details-marker { display:none; }
+.lg summary:hover, .lg[open] summary { background:color-mix(in srgb, var(--line-2) 55%, transparent); }
+.lg .when { color:var(--muted); font-size:12.5px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.lg .when b { color:var(--ink-2); font-weight:500; }
+.oc { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:2px 9px 2px 7px; border-radius:999px;
+      white-space:nowrap; background:var(--line-2); color:var(--muted); justify-self:start; }
+.oc::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+.oc-blocked, .oc-rejected { background:var(--tint-bad); color:var(--bad); }
+.oc-approved { background:var(--tint-ok); color:var(--ok); }
+.oc-waiting, .oc-timedout { background:var(--tint-warn); color:var(--warn); }
+.lg .act, .lg .why, .lg .eff { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lg .act code { font-weight:600; color:var(--ink); } .lg .act .sub { margin-left:6px; font-size:12px; }
+.lg .act b { font-weight:600; }
+.lg .why { color:var(--ink-2); }
+.lg .eff { color:var(--ink-2); font-size:12.5px; } .lg .eff b { color:var(--ink); }
+.lg .chev { color:var(--faint); font-size:12px; text-align:center; transition:transform .15s; }
+.lg[open] .chev { transform:rotate(90deg); }
+.lg-det { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px 20px; margin:0; padding:6px 14px 14px 138px;
+          font-size:12.5px; background:color-mix(in srgb, var(--line-2) 35%, transparent); }
+.lg-det dt { color:var(--muted); font-size:11px; letter-spacing:.05em; text-transform:uppercase; }
+.lg-det dd { margin:2px 0 0; color:var(--ink-2); } .lg-det dd code { color:var(--ink); }
+.ov-card .lg-list { margin:0 -18px -18px; border-top:1px solid var(--line-2); }
+.ov-card .lg-list .lg:first-child { border-top:0; }
+.lg-list.alone { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+tr.catches .lg-list { border:1px solid var(--line-2); border-radius:8px; margin-top:4px; }
+tr.catches .lg summary { padding:7px 12px; } tr.catches .lg-det { padding-left:12px; }
+@media (max-width:900px) { .lg summary { grid-template-columns:auto auto minmax(0, 1fr) 16px; }
+                           .lg .why, .lg .eff { display:none; } .lg-det { padding-left:14px; } }
+
+/* lists start short: a container with data-more shows its first few rows, the rest wait behind Show more */
+.xtra { display:none !important; }
+.flt { display:none !important; }
+.more { display:flex; align-items:center; gap:8px; padding:9px 14px; border-top:1px solid var(--line-2); font-size:12.5px; color:var(--muted); }
+.more .btn { height:26px; padding:0 10px; font-size:12.5px; } .more span { margin-right:4px; }
+tr.morerow > td { padding:0; } tr.morerow > td .more { border-top:0; }
+.seg { display:inline-flex; background:var(--line-2); border-radius:999px; padding:3px; gap:2px; }
+.seg button { border:0; background:none; border-radius:999px; padding:3px 11px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+.seg button.on { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); font-weight:500; }
+.seg button b { font-weight:600; font-variant-numeric:tabular-nums; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chips button { border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:2px 10px; font-size:12px; color:var(--muted); cursor:pointer; }
+.chips button.on { border-color:var(--ink); color:var(--ink); }
+details.logd summary { list-style:none; cursor:pointer; font:12px var(--mono); white-space:pre-wrap; color:var(--ink-2); max-width:560px; }
+details.logd summary::-webkit-details-marker { display:none; }
+details.logd summary .mini { font-family:var(--sans); } details.logd[open] summary .mini { display:none; }
+details.logd pre { max-width:560px; max-height:260px; overflow:auto; white-space:pre-wrap; margin:6px 0 0; font-size:12px; }
+details.rules summary { list-style:none; cursor:pointer; } details.rules summary::-webkit-details-marker { display:none; }
+details.rules summary::after { content:" ▸"; color:var(--faint); } details.rules[open] summary::after { content:" ▾"; }
+
 /* where people come from: a little funnel per channel */
 .src-bar { display:flex; height:6px; border-radius:3px; overflow:hidden; background:var(--line-2); width:160px; margin-top:7px; }
 .src-bar i { display:block; height:100%; }
@@ -407,6 +460,7 @@ async function load() {
   catch (e) { if (e.message !== "unauthorized") app.innerHTML = `<main><p class="err">${esc(e.message)}</p></main>`; return; }
   const w = d.week, named = d.pilots.filter((p) => !p.community);   // the community row has its own section
   d_latest = d.latest_version || "";
+  opened = new Set([...document.querySelectorAll("details[data-k][open]")].map((x) => x.dataset.k));   // a refresh keeps them open
   app.innerHTML = `
     <div class="top"><div class="in"><div class="brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg><span>Squid<b>brake</b></span> <small>Pilots</small></div>
       <nav><a href="#week">This week</a><a href="#individuals">Individuals</a><a href="#stopped">Stopped</a><a href="#traction">Traction</a><a href="#pilots">Pilots</a><a href="#sources">Sources</a><a href="#requests">Requests</a><a href="#fails">Failed installs</a><a href="#new">New pilot</a></nav>
@@ -454,9 +508,12 @@ async function load() {
     await api(`/v1/admin/pilots/${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); load();
   });
   document.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => copy(b.dataset.copy, b));
-  document.getElementById("allholds")?.addEventListener("change", (e) => {
-    document.getElementById("stopped").classList.toggle("show-all", e.target.checked);
+  document.querySelectorAll("[data-more]").forEach(fold);
+  document.querySelectorAll("[data-oc], [data-co]").forEach((b) => b.onclick = () => {
+    if (b.dataset.oc !== undefined) filter.oc = b.dataset.oc; else filter.co = b.dataset.co;
+    applyFilter();
   });
+  applyFilter();
   document.querySelectorAll("[data-mrr]").forEach((b) => b.onclick = async () => {
     const v = prompt(`Monthly revenue from ${b.dataset.name}, in dollars (0 = not paying):`, b.dataset.mrr || "");
     if (v === null || !/^\d+$/.test(v.trim())) return;
@@ -689,9 +746,8 @@ function communityPanel(d) {
         ${areaChart(daily)}<div class="axis"><span>${fmtDay(span[0])}</span><span>${fmtDay(span[7])}</span><span>today</span></div></div>
       <div class="ov-card"><h3>Who they are</h3><span class="sub">Counts of installs (version, computer, where from) and of actions (agents, rules).${c.outdated ? ` <b style="color:var(--warn)">Some run an old version.</b>` : ""}</span>${who}</div>
     </div>
-    ${catches.length ? `<div class="ov-card" style="margin-top:16px"><h3>What it held or blocked</h3><span class="sub">The program only, never its arguments, files or prompts; sizes as numbers. Newest first.</span>
-      <div style="overflow-x:auto"><table class="inner" style="width:100%"><thead><tr><th>When</th><th>Agent</th><th>Action</th><th>Why</th><th>Outcome</th><th>Would have changed</th><th>Decided in</th></tr></thead>
-      <tbody>${catches.map(catchRow).join("")}</tbody></table></div></div>` : ""}
+    ${catches.length ? `<div class="ov-card" style="margin-top:16px"><h3>What it held or blocked</h3><span class="sub">${catches.length} in the last 7 days, newest first. Open a line for the rule, the agent and how long the person took.</span>
+      ${catchList(catches, { n: 5, key: "individuals" })}</div>` : ""}
   </section>`;
 }
 
@@ -753,12 +809,12 @@ function failsPanel(fails) {
     <td><b>${esc(f.company || "Not a pilot")}</b><div class="mini">${esc(f.installer === "ps1" ? "Windows installer" : f.installer === "sh" ? "Mac / Linux installer" : "")}</div></td>
     <td>${esc(f.os || "–")}<div class="mini">${ago(f.created_at)}</div></td>
     <td style="max-width:220px">${esc(f.step || "–")}</td>
-    <td><pre style="max-width:560px;max-height:220px;overflow:auto;white-space:pre-wrap;margin:0;font-size:12px">${esc(f.log)}</pre></td>
+    <td>${logFold(f.log, "fail:" + f.id)}</td>
     <td><button class="btn" data-rdone="${f.id}" data-to="${f.done ? 0 : 1}">${f.done ? "Reopen" : "Mark fixed"}</button></td></tr>`).join("");
   return `<section id="fails"><div class="sec-h"><h2>Failed installs</h2>
       <span class="sub">${open.length ? `${open.length} to look at` : "Sent by the installer when it fails, only after the person says yes"}</span></div>
     ${fails.length ? `<div class="table-wrap"><table><thead><tr><th>Who</th><th>Computer</th><th>Where it stopped</th>
-      <th>What it said</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      <th>What it said</th><th></th></tr></thead><tbody data-more="5" data-key="fails">${rows}</tbody></table></div>`
       : `<div class="surface empty">None yet. When an install fails, the installer asks whether to send its last lines here.</div>`}
   </section>`;
 }
@@ -797,7 +853,7 @@ function teamPanel(asks) {
       <span class="sub">${open.length ? `${open.length} waiting for a reply` : "People who installed on their own and want help"}</span>
       <div class="act"><a class="btn" href="/team" target="_blank" rel="noopener">Open the form</a></div></div>
     ${asks.length ? `<div class="table-wrap"><table><thead><tr><th>Who</th><th>Company</th><th>Agents</th><th>Note</th>
-      <th>From</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      <th>From</th><th></th></tr></thead><tbody data-more="6" data-key="asks">${rows}</tbody></table></div>`
       : `<div class="surface empty">Nobody yet. The form is linked from <code>connect all</code> and the dashboard's Team page.</div>`}
   </section>`;
 }
@@ -826,7 +882,9 @@ function row(p) {
   const spark = `<div class="spark" title="Actions per day, last 14 days">${p.daily.map((v) => `<i style="height:${Math.max(1, (v / max) * 34)}px" title="${v}"></i>`).join("")}</div>`;
   const w = p.week;
   const agents = Object.entries(p.agents).map(([a, n]) => `<span class="chip">${esc(a)} · ${n}</span>`).join("") || `<span class="sub">none yet</span>`;
-  const approvals = (p.rule_approvals || []).slice(0, 5).map((r) => `<div class="mini" title="${r.approved} of ${r.decided} holds approved">${esc(r.rule)}: ${r.approve_pct}% approved (${r.decided})${r.always_allowed ? ` <b>· always allowed: make it auto-allow? (their dashboard: Rules → Allow it)</b>` : ""}</div>`).join("");
+  const ra = (p.rule_approvals || []).slice(0, 5), always = ra.filter((r) => r.always_allowed).length;
+  const approvals = ra.length ? `<details class="rules" data-k="rules:${esc(p.code)}"${opened.has("rules:" + p.code) ? " open" : ""}><summary class="mini">How their holds get decided${always ? ` <b>· ${always} always allowed</b>` : ""}</summary>
+    ${ra.map((r) => `<div class="mini" title="${r.approved} of ${r.decided} holds approved">${esc(r.rule)}: ${r.approve_pct}% approved (${r.decided})${r.always_allowed ? ` <b>· always allowed: make it auto-allow? (their dashboard: Rules → Allow it)</b>` : ""}</div>`).join("")}</details>` : "";
   const hits = (Object.entries(p.rules_hit).map(([r, n]) => `<span class="chip r">${esc(r)} · ${n}</span>`).join("") || `<span class="sub">nothing</span>`) + approvals;
   return `<tr><td><div class="co">${esc(p.company)}</div><div class="sub">${esc(p.contact || "")}</div>
       <div class="sub">${esc(p.note || "")}</div><div class="mini"><span class="code">${esc(p.code)}</span> · link opened ${p.page_views}×</div>
@@ -847,9 +905,8 @@ function row(p) {
       <button class="btn" data-copy="${esc(p.link)}">Copy link</button>
       <button class="btn" data-mrr="${p.mrr || ""}" data-code="${esc(p.code)}" data-name="${esc(p.company)}" title="Monthly revenue from this pilot">${p.mrr ? "$" + Number(p.mrr).toLocaleString() + "/mo" : "Set revenue"}</button>
       <button class="icon-btn" title="Delete pilot" data-del="${esc(p.code)}" data-warn="${esc(deleteWarning(p))}">Delete</button></div></td></tr>
-    ${p.catches && p.catches.length ? `<tr class="catches"><td colspan="7"><details><summary>What it held or blocked · ${p.catches.length}</summary>
-      <table class="inner"><thead><tr><th>When</th><th>Agent</th><th>Action</th><th>Why</th><th>Outcome</th><th>Would have changed</th><th>Decided in</th></tr></thead>
-      <tbody>${p.catches.map(catchRow).join("")}</tbody></table>
+    ${p.catches && p.catches.length ? `<tr class="catches"><td colspan="7"><details data-k="pilot:${esc(p.code)}"${opened.has("pilot:" + p.code) ? " open" : ""}><summary>What it held or blocked · ${p.catches.length}</summary>
+      ${catchList(p.catches, { n: 5, key: "pilot:" + p.code })}
       <div class="mini" style="margin-top:6px">Program only (never its arguments, files or prompts), the rule's reason, and sizes as numbers.</div></details></td></tr>` : ""}`;
 }
 
@@ -885,30 +942,94 @@ function stoppedPanel(pilots) {
   const stopped = all.filter((x) => STOPPED.includes(x.outcome));
   const saved = {};
   for (const x of stopped) for (const [k, v] of Object.entries(x.saved || {})) saved[k] = (saved[k] || 0) + Number(v);
-  const rows = all.map((x) => `<tr${STOPPED.includes(x.outcome) ? "" : ' class="hold"'}>
-    <td class="sub" style="white-space:nowrap">${esc((x.t || "").replace("T", " "))}</td>
-    <td><b>${esc(x.company)}</b><div class="mini">${esc(x.agent || "")}</div></td>
-    <td>${x.program ? `<code>${esc(x.program)}</code>${x.category ? `<div class="mini">${esc(x.category)}</div>` : ""}` : `<code>${esc(x.tool || "")}</code>`}</td>
-    <td>${esc(x.why || "")}<div class="mini">${esc(x.rule || "")}</div></td>
-    <td class="${OUTCOME[x.outcome] || ""}" style="font-weight:500">${esc(x.outcome || "")}${x.decide_s !== undefined && x.decide_s !== null ? `<div class="mini">in ${fmtSecs(x.decide_s)}</div>` : ""}</td>
-    <td>${consequence(x)}</td></tr>`).join("");
+  const cos = [...new Set(all.map((x) => x.company))].sort();
   const sub = stopped.length ? `${stopped.length} stopped${savedText(saved) ? " · would have changed " + savedText(saved) : ""}` : "Rejected or blocked actions, from every pilot";
+  const seg = `<div class="seg"><button data-oc="stopped"${filter.oc === "stopped" ? ' class="on"' : ""}>Stopped <b>${stopped.length}</b></button>
+      <button data-oc=""${filter.oc === "" ? ' class="on"' : ""}>All holds <b>${all.length}</b></button></div>`;
+  const chips = cos.length > 1 ? `<div class="chips"><button data-co=""${filter.co === "" ? ' class="on"' : ""}>Everyone</button>
+      ${cos.map((co) => `<button data-co="${esc(co)}"${filter.co === co ? ' class="on"' : ""}>${esc(co)}</button>`).join("")}</div>` : "";
   return `<section id="stopped"><div class="sec-h"><h2>Stopped</h2><span class="sub">${esc(sub)}</span>
-      ${all.length > stopped.length ? `<div class="act"><label class="sub"><input type="checkbox" id="allholds"> Show approved and waiting holds too (${all.length - stopped.length})</label></div>` : ""}</div>
-    ${all.length ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Company</th><th>Action</th><th>Why it stopped</th><th>Outcome</th><th>What it would have done</th></tr></thead>
-      <tbody>${rows}</tbody></table>${stopped.length ? "" : `<div class="empty stopped-none">Nothing rejected or blocked yet.</div>`}</div>
+      ${all.length ? `<div class="act">${chips}${seg}</div>` : ""}</div>
+    ${all.length ? `${catchList(all, { who: (x) => x.company, n: 8, key: "stopped", alone: true })}
       <p class="foot" style="margin-top:8px">The program only, never its arguments, files or prompts. Sizes in bold were measured on their machine before the action ran (files, rows, commits); otherwise the kind of damage, from the program.</p>`
       : `<div class="surface empty">Nothing held or blocked yet. Shows up here within 2 minutes of a block or a no.</div>`}
   </section>`;
 }
+// what the Stopped list shows: only rejected or blocked (the default) or every hold, and one company or everyone
+const filter = { oc: "stopped", co: "" };
+function applyFilter() {
+  const list = document.querySelector("#stopped .lg-list");
+  if (!list) return;
+  for (const x of list.querySelectorAll(".lg"))
+    x.classList.toggle("flt", (filter.oc === "stopped" && !STOPPED.includes(x.dataset.oc)) || (filter.co && x.dataset.co !== filter.co));
+  document.querySelectorAll("#stopped [data-oc]").forEach((b) => b.classList.toggle("on", b.dataset.oc === filter.oc));
+  document.querySelectorAll("#stopped [data-co]").forEach((b) => b.classList.toggle("on", b.dataset.co === filter.co));
+  fold(list);
+}
 
+// Lists start short. A container with data-more="n" shows its first n rows; the rest wait behind "Show more" (nothing is
+// left out, only folded). Rows a filter hid (.flt) don't count. How far a list was unfolded survives a refresh.
+const unfolded = {};
+function fold(el) {
+  const n0 = Number(el.dataset.more) || 8, key = el.dataset.key || "", table = el.tagName === "TBODY";
+  el.querySelector(":scope > .more, :scope > .morerow")?.remove();
+  const rows = [...el.children].filter((k) => !k.classList.contains("flt"));
+  const n = Math.max(n0, unfolded[key] || 0), left = Math.max(0, rows.length - n);
+  rows.forEach((k, i) => k.classList.toggle("xtra", i >= n));
+  if (rows.length <= n0 && rows.length) return;
+  const row = document.createElement(table ? "tr" : "div");
+  row.className = table ? "morerow" : "more";
+  const inner = !rows.length ? `<span>Nothing here.</span>`
+    : left ? `<span>${rows.length - left} of ${rows.length}</span><button class="btn" data-step>Show ${Math.min(left, 10)} more</button>
+              ${left > 10 ? `<button class="btn ghost" data-all>Show all ${rows.length}</button>` : ""}`
+    : `<span>All ${rows.length}</span><button class="btn ghost" data-less>Show fewer</button>`;
+  row.innerHTML = table ? `<td colspan="99"><div class="more">${inner}</div></td>` : inner;
+  row.onclick = (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    unfolded[key] = b.hasAttribute("data-all") ? rows.length : b.hasAttribute("data-less") ? 0 : n + 10;
+    fold(el);
+  };
+  el.appendChild(row);
+}
+let opened = new Set();                     // data-k of the <details> that were open before a refresh
+
+// One held or blocked action as a line: when, what happened, the program, why, what it would have changed. Open it for
+// the rule, the agent, the tool and how long the person took. `who` adds the company, for the list that mixes pilots.
 const OUTCOME = { approved: "o-approved", rejected: "o-rejected", blocked: "o-blocked", "timed out": "o-timed", waiting: "o-waiting" };
-function catchRow(x) {
-  const action = x.program ? `<code>${esc(x.program)}</code>${x.category ? ` <span class="sub">${esc(x.category)}</span>` : ""}` : `<code>${esc(x.tool || "")}</code>`;
-  return `<tr><td class="sub" style="white-space:nowrap">${esc(x.t.replace("T", " "))}</td><td>${esc(x.agent || "")}</td><td>${action}</td>
-    <td>${esc(x.why || "")}<div class="mini">${esc(x.rule || "")}</div></td>
-    <td class="${OUTCOME[x.outcome] || ""}" style="font-weight:500">${esc(x.outcome || "")}</td>
-    <td>${consequence(x)}</td><td class="mini">${x.decide_s !== undefined ? fmtSecs(x.decide_s) : "–"}</td></tr>`;
+function when(t) {
+  const d = (t || "").slice(0, 10), hm = (t || "").slice(11, 16), today = new Date().toISOString().slice(0, 10);
+  const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const lbl = d === today ? "Today" : d === yday ? "Yesterday" : d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+  return `<span class="when" title="${esc(t || "")}"><b>${lbl}</b> ${hm}</span>`;
+}
+function effect(x) {                        // the short form of consequence(), for the line
+  const sized = savedText(x.saved);
+  if (sized) return `<b>${esc(sized)}</b>`;
+  const hit = DAMAGE.find(([re]) => re.test(x.program || ""));
+  return esc(hit ? hit[1] : KIND_DAMAGE[x.category] || "");
+}
+function catchLine(x, who) {
+  const key = [who || "", x.t, x.rule, x.agent, x.program || x.tool].join("|"), oc = (x.outcome || "").replace(" ", "");
+  const action = x.program ? `<code>${esc(x.program)}</code>${x.category ? `<span class="sub">${esc(x.category)}</span>` : ""}` : `<code>${esc(x.tool || "")}</code>`;
+  const decided = x.decide_s !== undefined && x.decide_s !== null ? fmtSecs(x.decide_s)
+    : x.outcome === "blocked" ? "a rule blocked it, nobody was asked" : x.outcome === "waiting" ? "still waiting" : "–";
+  const det = [["Why", esc(x.why || "–")], ["Rule", `<code>${esc(x.rule || "–")}</code>`], ["Agent", esc(x.agent || "–")],
+    ["Tool", esc(x.tool || "–")], ["Decided in", decided], ["Would have changed", consequence(x)]];
+  return `<details class="lg" data-k="${esc(key)}" data-oc="${esc(x.outcome || "")}" data-co="${esc(who || "")}"${opened.has(key) ? " open" : ""}>
+    <summary>${when(x.t)}<span class="oc oc-${esc(oc)}">${esc(x.outcome || "")}</span>
+      <span class="act">${who ? `<b>${esc(who)}</b> · ` : ""}${action}</span><span class="why">${esc(x.why || x.rule || "")}</span>
+      <span class="eff">${effect(x)}</span><span class="chev">▶</span></summary>
+    <dl class="lg-det">${det.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl></details>`;
+}
+function catchList(items, { who = null, n = 6, key = "", alone = false } = {}) {
+  return `<div class="lg-list${alone ? " alone" : ""}" data-more="${n}" data-key="${esc(key)}">${items.map((x) => catchLine(x, who ? who(x) : null)).join("")}</div>`;
+}
+// a failed install's log: its first two lines, open for the rest
+function logFold(log, key) {
+  const lines = String(log || "").split("\n"), head = lines.slice(0, 2).join("\n"), rest = lines.length - 2;
+  if (rest <= 0) return `<pre style="max-width:560px;white-space:pre-wrap;margin:0;font-size:12px">${esc(log)}</pre>`;
+  return `<details class="logd" data-k="${esc(key)}"${opened.has(key) ? " open" : ""}><summary>${esc(head)}<div class="mini">${rest} more lines ▸</div></summary><pre>${esc(lines.slice(2).join("\n"))}</pre></details>`;
 }
 
 // Deleting a hosted pilot switches its dashboard off, and Squidbrake fails closed: their agents stop until they remove it
