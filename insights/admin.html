@@ -620,7 +620,8 @@ function overview(d, inv, asks) {
     .filter((x) => STOPPED.includes(x.outcome) && !PAUSED_RULES.includes(x.rule)).sort((a, b) => (b.t || "").localeCompare(a.t || ""));
   const decided = wk.approved + wk.rejected + wk.timed_out;
   // the hero and the counts below it: all time by default (d.pilots_all_time), or this week
-  const all = range === "all" && d.pilots_all_time, W = all ? d.pilots_all_time : wk, when = all ? "since the start" : "this week";
+  const all = range === "all" && d.pilots_total, W = all ? d.pilots_total : wk, when = all ? "since the start" : "this week";
+  const allDaily = (d.pilots_daily || []).map((x) => x[1]), allDays = (d.pilots_daily || []).map((x) => x[0]);
   const stoppedN = all ? (W.rejected || 0) + (W.blocked || 0) : sc.stopped;
   const decidedN = (W.approved || 0) + (W.rejected || 0) + (W.timed_out || 0);
   const approveRate = all ? (decidedN ? Math.round(100 * W.approved / decidedN) : null) : sc.approve_rate;
@@ -708,9 +709,13 @@ function overview(d, inv, asks) {
         <div class="fixes">${fixHtml}</div>
         <div style="margin-top:14px"><button class="btn" data-copy="${esc(weeklyReport(d))}">Copy weekly report</button>
           <button class="btn" id="alltime-btn" aria-expanded="false" aria-controls="alltime">All time usage</button></div></div>
-      <div class="chart-card"><div class="top-row"><div><div class="k">Agent actions, last 14 days</div><div class="big">${thisWk.toLocaleString()}</div>
+      ${all && allDaily.length > 1
+        ? `<div class="chart-card"><div class="top-row"><div><div class="k">Agent actions, all time</div><div class="big">${W.events.toLocaleString()}</div>
+          <div class="k" style="margin-top:4px">since ${fmtDay(allDays[0])} · ${thisWk.toLocaleString()} this week</div></div></div>
+        ${areaChart(allDaily)}<div class="axis"><span>${fmtDay(allDays[0])}</span><span>${fmtDay(allDays[Math.floor(allDays.length / 2)])}</span><span>today</span></div></div>`
+        : `<div class="chart-card"><div class="top-row"><div><div class="k">Agent actions, last 14 days</div><div class="big">${thisWk.toLocaleString()}</div>
           <div class="k" style="margin-top:4px">this week${lastWk ? ` · ${lastWk.toLocaleString()} the week before` : ""}</div></div>${deltaChip(wow)}</div>
-        ${areaChart(daily)}<div class="axis"><span>${fmtDay((d.span || [])[0])}</span><span>${fmtDay((d.span || [])[7])}</span><span>today</span></div></div>
+        ${areaChart(daily)}<div class="axis"><span>${fmtDay((d.span || [])[0])}</span><span>${fmtDay((d.span || [])[7])}</span><span>today</span></div></div>`}
     </div>
     <div class="kpis">${kpis}</div>
     <div id="alltime" class="ov-card" hidden style="margin-top:16px"></div>

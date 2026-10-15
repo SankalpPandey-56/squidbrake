@@ -559,11 +559,14 @@ def all_time():
         days = c.execute("SELECT install_id, day, counts FROM days").fetchall()
     per: dict[str, dict] = {p["code"]: {"code": p["code"], "company": p["company"], "community": p["code"] == COMMUNITY_CODE,
                                         "days": set(), **{k: 0 for k in SUMS}} for p in pilots}
+    by_day: dict[str, int] = {}
     for iid, day, counts in days:
         row = per.get(code_of.get(iid))
         if row is None:
             continue
         cnt = json.loads(counts)
+        if row["code"] != COMMUNITY_CODE:
+            by_day[day] = by_day.get(day, 0) + cnt.get("events", 0)
         for k in SUMS:
             row[k] += cnt.get(k, 0)
         if cnt.get("events"):
@@ -576,37 +579,13 @@ def all_time():
     rows.sort(key=lambda r: -r["events"])
     total = lambda rs: {k: sum(r[k] for r in rs) for k in SUMS}
     named = [r for r in rows if not r["community"]]
+    daily = []
+    if by_day:      # every day from the first to today, quiet days as 0
+        first, today = datetime.fromisoformat(min(by_day)).date(), datetime.now(timezone.utc).date()
+        daily = [[(first + timedelta(days=i)).isoformat(), by_day.get((first + timedelta(days=i)).isoformat(), 0)]
+                 for i in range((today - first).days + 1)]
     return {"pilots": rows, "pilots_total": total(named), "individuals_total": total([r for r in rows if r["community"]]),
-            "since": min((r["first_day"] for r in rows if r["first_day"]), default=None)}
-
-
-@app.get("/v1/admin/all-time", dependencies=[Depends(admin)])
-def all_time():
-    """Every day's counts ever received, per pilot and in total (the overview shows the last 14 days)."""
-    with db() as c:
-        pilots = [dict(r) for r in c.execute("SELECT code, company FROM pilots")]
-        code_of = dict(c.execute("SELECT install_id, code FROM installs"))
-        days = c.execute("SELECT install_id, day, counts FROM days").fetchall()
-    per: dict[str, dict] = {p["code"]: {"code": p["code"], "company": p["company"], "community": p["code"] == COMMUNITY_CODE,
-                                        "days": set(), **{k: 0 for k in SUMS}} for p in pilots}
-    for iid, day, counts in days:
-        row = per.get(code_of.get(iid))
-        if row is None:
-            continue
-        cnt = json.loads(counts)
-        for k in SUMS:
-            row[k] += cnt.get(k, 0)
-        if cnt.get("events"):
-            row["days"].add(day)
-    rows = []
-    for r in per.values():
-        active = sorted(r.pop("days"))
-        rows.append({**r, "active_days": len(active), "first_day": active[0] if active else None,
-                     "last_day": active[-1] if active else None})
-    rows.sort(key=lambda r: -r["events"])
-    total = lambda rs: {k: sum(r[k] for r in rs) for k in SUMS}
-    named = [r for r in rows if not r["community"]]
-    return {"pilots": rows, "pilots_total": total(named), "individuals_total": total([r for r in rows if r["community"]]),
+            "pilots_daily": daily,
             "since": min((r["first_day"] for r in rows if r["first_day"]), default=None)}
 
 
@@ -706,7 +685,8 @@ def overview(request: Request):
     pilots_week = {k: sum(p["week"][k] for p in named) for k in SUMS}
     community = next((p for p in out if p["community"]), None)
     return {"span": span, "pilots": out, "week": totals, "pilots_week": pilots_week, "latest_version": latest or None,
-            "pilots_all_time": all_time()["pilots_total"],
+            **{k: v for k, v in all_time().items() if k in ("pilots_total", "pilots_daily")},
+            "pilots_all_time": None,
             "active_pilots": sum(1 for p in named if p["stage"] == "active"),
             "installs": sum(p["installs"] for p in out), "scorecard": scorecard(named, pilots_week),
             "community": community_block(community, [i for i in installs if i["code"] == COMMUNITY_CODE], by_install, span, latest)}
