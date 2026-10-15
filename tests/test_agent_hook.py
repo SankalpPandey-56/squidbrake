@@ -19,7 +19,8 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import agent_hook  # noqa: E402
-import connect  # noqa: E402
+import connect
+import offline  # noqa: E402
 
 # what each agent sends for: a home-folder wipe, a harmless listing, reading .env, and an MCP tool
 CASES = {
@@ -97,7 +98,9 @@ def test_install_and_remove_hooks(tmp_path, monkeypatch):
     cur = json.loads((tmp_path / ".cursor" / "hooks.json").read_text(encoding="utf-8"))
     shell = cur["hooks"]["beforeShellExecution"]
     assert shell[0] == {"command": "./their-own-hook.sh"} and "agent_hook.py" in shell[1]["command"]
-    assert shell[1]["failClosed"] is True and "cursor --url https://x.app.example.com --key gw_k" in shell[1]["command"]
+    assert shell[1]["failClosed"] is True and "cursor --url https://x.app.example.com" in shell[1]["command"]
+    assert "gw_k" not in shell[1]["command"]                            # the key is in a file only this user reads
+    assert offline.load_key("https://x.app.example.com") == "gw_k"
     assert "agent_hook.py" in cur["hooks"]["beforeMCPExecution"][0]["command"]
     assert cur["hooks"]["preToolUse"][0]["matcher"] == "Write|Delete"
     codex = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))

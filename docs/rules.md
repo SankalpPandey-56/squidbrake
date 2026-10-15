@@ -24,6 +24,8 @@ The weekly report (also `GET /v1/reports/week` and the Reports tab) has:
 
 ## Command checks
 
+A script, a Makefile target or a `package.json` script (including the `preinstall`, `install`, `postinstall` and `prepare` scripts `npm install` runs) is read line by line through the same checks, and the same `rules.yaml` rules, as a command typed directly. `npm install --ignore-scripts` runs none of them.
+
 Shell tools (Claude Code's `Bash` and `PowerShell`, or any tool matching `command_checks.tools`) are read by
 [`commands.py`](../commands.py) before the rules decide: the line is split on `&&`, `;`, `|` (outside quotes), and
 `sudo`, `xargs`, `bash -c`, `powershell -Command`, `$(...)` and commands sent over `ssh`, `docker exec` or
@@ -33,7 +35,9 @@ Shell tools (Claude Code's `Bash` and `PowerShell`, or any tool matching `comman
 |---|---|---|
 | catastrophic | `rm -rf /`, `rm -rf ~`, `rmdir /s /q d:\`, `mkfs`, `dd of=/dev/sda`, `chmod -R 777 /` | block |
 | irreversible | `rm -r`, `git push --force`, `git reset --hard`, `terraform destroy`, `kubectl delete`, `aws ... delete-*`, `DROP TABLE` | review |
-| hidden | `eval`, `curl ... \| sh`, `base64 -d \| bash`, `powershell -EncodedCommand`, `python -c` | review |
+| hidden | `eval`, `curl ... \| sh`, `bash <(curl ...)`, `source <(...)`, `cat setup.sh \| bash`, `base64 -d \| bash`, `powershell -EncodedCommand`, `python -c` | review |
+| secrets out | `curl -d "$(env)"`, `curl -F k=@~/.ssh/id_rsa`, `scp ~/.aws/credentials`, `nc ... < .env`: a send whose data is environment variables, SSH or cloud keys, `.env` or key files | review (irreversible) |
+| downloaded_then_run | a file downloaded in this conversation, then run, sourced or made runnable (`curl -o x.sh URL`, then `sh x.sh`) | review |
 | written_then_run | a script the agent wrote in this conversation, then runs (`python cleanup.py`) | review |
 | edited_then_run | a script the agent changed in this conversation, then runs | warn (`review` holds it) |
 | read_only | `ls`, `cat`, `grep`, `git status` / `log` / `diff` | `allow` in the shipped `rules.yaml` |

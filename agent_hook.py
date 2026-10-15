@@ -52,7 +52,7 @@ def _arg(flag: str, env: str, default: str = "") -> str:
 
 
 URL = _arg("--url", "GATEWAY_URL", "http://localhost:8080").rstrip("/")
-KEY = _arg("--key", "GATEWAY_API_KEY")
+KEY = _arg("--key", "GATEWAY_API_KEY") or (offline.load_key(URL) if offline else "")
 FAIL_OPEN = os.getenv("GATEWAY_FAIL_OPEN", "").lower() in ("1", "true", "yes")
 MAX_WAIT = float(os.getenv("GATEWAY_MAX_WAIT", "540"))   # under the 600 s timeout `connect agents` sets
 

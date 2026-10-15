@@ -48,6 +48,8 @@ shadow_agents: []          # shadow mode for just these agents (source or key na
 #                wait for a person or be blocked, and commands that can't be undone or can't be read, are blocked
 #   block        everything is blocked (the safest; agents stop working until Squidbrake is back)
 #   allow        everything runs
+#   warn         everything runs, with a loud warning on each action; when Squidbrake is back, what ran is put on
+#                the record (protection.was_off). Opt in for a laptop that reboots; Squidbrake's keys stay out of reach
 # Each rule can say its own with `when_unreachable: allow | block`. Agents keep a copy of these answers, so they
 # follow them while it's down. What runs while it's down isn't recorded: the tradeoff is in THREAT_MODEL.md.
 when_unreachable: block_risky

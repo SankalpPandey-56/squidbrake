@@ -723,6 +723,58 @@ def _git(cmd: Command, words: list[str]) -> Command:
     return cmd
 
 
+# A shell or interpreter reading its program from a pipe: `cat setup.sh | bash`, `... | python3`. Flags only, no script.
+_STDIN_TO_SHELL = re.compile(r"\|\s*(sudo\s+)?((ba|z|da|k)?sh|python[0-9.]*|perl|ruby|node|php|pwsh|powershell)"
+                             r"(\s+-(?![ce]\b|-command\b|m\b)[A-Za-z-]+)*\s*($|[;&|)])", re.I)
+# A shell or `source` reading another command's output as its program: `bash <(curl ...)`, `source <(...)`, `. <(...)`.
+_SUBST_TO_SHELL = re.compile(r"(^|[\s;&|(])(source|\.|(ba|z|da|k)?sh|python[0-9.]*|perl|ruby|node)\s+(-\S+\s+)*<\(",
+                             re.I)
+# Sending data to another machine, and secrets that must not go there: environment variables, SSH and cloud keys,
+# .env files, key files. A sender counts when it carries data: a body, a form, an upload, a redirect, or a copy.
+_SENDER = re.compile(r"\b(curl|wget|nc|ncat|netcat|socat|scp|sftp|rsync|invoke-webrequest|iwr|invoke-restmethod|irm)\b"
+                     r"(?=[^|;&]*(\s(-d|--data\S*|-F|--form\S*|-T|--upload-file|--json|--post-data|--post-file|"
+                     r"--body-file|-Body|-InFile)(\s|=|$)|\s<|\s\S+:\S*\s*$|\s\S+@\S+:))", re.I)
+_SECRET = re.compile(r"\$\((env|printenv|set|export\s+-p)\)|`(env|printenv)`|(^|[|;&]\s*)(env|printenv)\s*\||"
+                     r"(~|\$HOME|\$\{HOME\}|%USERPROFILE%)?[\\/]\.ssh[\\/]?|\.aws[\\/]|(^|[\s@=<'\"/])\.env(\.\w+)?\b|"
+                     r"\bid_(rsa|dsa|ecdsa|ed25519)\b|\.(pem|p12|pfx|key)\b|\bcredentials\b|\.npmrc\b|\.netrc\b|"
+                     r"\.git-credentials\b|\.kube[\\/]config\b|\.docker[\\/]config\.json", re.I)
+
+
+def downloads(line: str) -> list[str]:
+    """Files a command line writes from the network: curl -o F / -O, wget [-O F] URL, Invoke-WebRequest -OutFile F."""
+    out = []
+    for c in read(line).commands:
+        w, low = c.words, [x.lower() for x in c.words]
+        url = next((_unquote(x) for x in w[1:] if re.match(r"^['\"]?https?://", x)), "")
+        name = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] if url else ""
+        if c.program == "curl":
+            for i, x in enumerate(w):
+                if (x == "--output" or re.match(r"^-[A-Za-z]*o$", x)) and i + 1 < len(w):     # -o, -so, -sSLo
+                    out.append(_unquote(w[i + 1]))
+                elif x.startswith("--output="):
+                    out.append(_unquote(x.split("=", 1)[1]))
+            if ("-O" in w or "--remote-name" in low) and name:
+                out.append(name)
+        elif c.program == "wget" and url:
+            target = next((w[i + 1] for i, x in enumerate(w[:-1]) if x in ("-O", "--output-document")), None)
+            out.append(_unquote(target) if target else name)
+        elif c.program in ("invoke-webrequest", "iwr"):
+            out += [_unquote(w[i + 1]) for i, x in enumerate(low[:-1]) if x == "-outfile"]
+    return [x for x in out if x and x != "-"]
+
+
+def executes(line: str) -> list[str]:
+    """Files a command line runs, sources or makes runnable: scripts, `source f`, `. f`, `chmod +x f`."""
+    reading = read(line)
+    found = list(reading.scripts)
+    for c in reading.commands:
+        if c.program in ("source", ".") and len(c.words) > 1:
+            found.append(_unquote(c.words[1]))
+        elif c.program == "chmod" and any(re.match(r"^([ugoa]*\+\w*x|[0-7]*[1357][0-7]{0,2})$", x) for x in c.words[1:]):
+            found += [_unquote(x) for x in c.words[1:] if not x.startswith(("+", "-")) and not re.match(r"^[ugoa]*[+=]|^[0-7]+$", x)]
+    return list(dict.fromkeys(found))
+
+
 _PIPE_TO_SHELL = re.compile(r"\|\s*(sudo\s+)?(ba|z|da|k)?sh\b|\|\s*(sudo\s+)?(python[0-9.]*|perl|ruby|node|php)\b(?!\s+-m\s)"
                             r"|\|\s*(iex|invoke-expression)\b", re.I)
 
@@ -732,6 +784,13 @@ def _read(line: str, depth: int = 0) -> tuple[list[Command], list[str]]:
     if _PIPE_TO_SHELL.search(line) and re.search(r"\b(curl|wget|iwr|invoke-webrequest|irm|invoke-restmethod|"
                                                  r"base64|certutil|xxd\s+-r)\b", line, re.I):
         hidden.append("downloads or decodes code and runs it straight away, so it can't be read before it runs")
+    elif depth == 0 and _STDIN_TO_SHELL.search(line):
+        hidden.append("pipes code into a shell or interpreter, so what runs can't be read before it runs")
+    if depth == 0 and _SUBST_TO_SHELL.search(line):
+        hidden.append("runs the output of another command as code (<(...)), which can't be read before it runs")
+    if depth == 0 and (send := _SENDER.search(line)) and (secret := _SECRET.search(line)):
+        commands.append(Command(program=send.group(1).lower(), words=[send.group(1)], kind="irreversible",
+                                why=f"sends secrets out ({secret.group(0).strip()} reaches {send.group(1)})", raw=line))
     parts, subs = _split_top(line)
     for sub in subs:
         c, h = _read(sub, depth + 1) if depth < 4 else ([], ["a command nested too deep to read"])

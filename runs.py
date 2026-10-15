@@ -145,6 +145,18 @@ def _make(words: list[str], cwd: Path) -> list[dict]:
 
 def _node(words: list[str], cwd: Path) -> list[dict]:
     prog, rest = words[0], [w for w in words[1:] if not w.startswith("-")]
+    if (not rest and prog == "yarn") or rest[:1] in (["install"], ["i"], ["ci"]):
+        if "--ignore-scripts" in words:
+            return []
+        # installing runs the project's own lifecycle scripts (a dependency's can't be read before it's downloaded)
+        text = _read(cwd / "package.json")
+        try:
+            scripts = json.loads(text).get("scripts") if text else None
+        except (ValueError, AttributeError):
+            return []
+        return [{"via": f"package.json script `{k}` (runs on install)", "lines": [scripts[k]]}
+                for k in ("preinstall", "install", "postinstall", "prepare")
+                if isinstance(scripts, dict) and isinstance(scripts.get(k), str)]
     if not rest:
         return []
     if rest[0] in ("run", "run-script"):

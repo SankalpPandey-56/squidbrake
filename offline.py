@@ -41,6 +41,51 @@ def _home() -> Path:
     return Path(os.getenv("SQUIDBRAKE_HOME") or Path.home() / ".squidbrake")
 
 
+def key_path() -> Path:
+    """Agent keys the hooks use, per gateway: ~/.squidbrake/data/hook-keys.json, 600, in the folder agents can't read
+    (selfguard.py), so the key isn't in an agent's own settings for it to read."""
+    return _home() / "data" / "hook-keys.json"
+
+
+def save_key(url: str, key: str) -> None:
+    path = key_path()
+    try:
+        keys = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        keys = {}
+    keys[url.rstrip("/")] = key
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(keys, f)
+    os.replace(tmp, path)
+    _private(path)
+
+
+def load_key(url: str) -> str:
+    """The key for this gateway, or "". Says so (stderr) if others on this computer could read the file."""
+    path = key_path()
+    try:
+        if os.name != "nt" and path.stat().st_mode & 0o077:
+            import sys
+            print(f"Squidbrake: {path} can be read by other users on this computer; run: chmod 600 {path}",
+                  file=sys.stderr)
+        return str(json.loads(path.read_text(encoding="utf-8")).get(url.rstrip("/")) or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def _private(path: Path) -> None:
+    """Owner-only: 600 for files, 700 for folders (POSIX; on Windows the user's profile already is)."""
+    if os.name == "nt":
+        return
+    try:
+        os.chmod(path, 0o700 if path.is_dir() else 0o600)
+    except OSError:
+        pass
+
+
 def cache_path(url: str) -> Path:
     return Path(os.getenv("SQUIDBRAKE_OFFLINE_DIR") or _home()) / f"offline-policy-{hashlib.sha256(url.rstrip('/').encode()).hexdigest()[:10]}.json"
 
@@ -73,6 +118,7 @@ def due(url: str) -> bool:
 
 def refresh(http, url: str) -> None:
     """With the hook's own httpx client, right after the gateway answered: keep the copy fresh. Never raises."""
+    flush(http, url)
     if not due(url):
         return
     try:
@@ -154,14 +200,51 @@ def decide(url: str, *, name: str, kind: str = "tool_call", source: str | None =
             wu = rule.get("when_unreachable")
             if wu == "allow":
                 return True, f"rule '{rule.get('id')}' says when_unreachable: allow, so it ran unrecorded"
+            if wu == "warn":
+                return _warn(url, name, kind, source, session_id, input)
             if wu == "block_risky":
                 return _risky(pol, rule.get("action"), f"rule '{rule.get('id')}'", name, input)
             return False, f"rule '{rule.get('id')}' says to block it while Squidbrake is unreachable"
     if pol.get("default") == "allow":
         return True, "the rules say when_unreachable: allow, so it ran unrecorded"
+    if pol.get("default") == "warn":
+        return _warn(url, name, kind, source, session_id, input)
     if pol.get("default") == "block_risky":
         return _risky(pol, pol.get("default_action"), "the default", name, input)
     return False, "the rules block everything while Squidbrake is unreachable (when_unreachable: block)"
+
+
+def _queue(url: str) -> Path:
+    return cache_path(url).with_name(cache_path(url).stem + "-ran-unchecked.jsonl")
+
+
+def _warn(url: str, name: str, kind: str, source, session_id, input) -> tuple[bool, str]:
+    """when_unreachable: warn (opt-in): it runs, loudly, and is put on the record once Squidbrake answers again."""
+    try:
+        with _queue(url).open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"name": name, "kind": kind, "source": source, "session_id": session_id,
+                                "input": input, "ran_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}) + "\n")
+    except OSError:
+        pass
+    return True, ("WARNING: SQUIDBRAKE PROTECTION IS OFF. It can't be reached and when_unreachable is warn, so this ran "
+                  "unchecked; it goes on the record when Squidbrake is back")
+
+
+def flush(http, url: str) -> None:
+    """Right after the gateway answered: record what ran unchecked while it was down (warn mode). Never raises."""
+    q = _queue(url)
+    try:
+        lines = q.read_text(encoding="utf-8").splitlines() if q.exists() else []
+        if not lines:
+            return
+        q.unlink()
+        for line in lines[-500:]:
+            ev = json.loads(line)
+            http.post("/v1/events", json={**{k: ev.get(k) for k in ("name", "kind", "source", "session_id", "input")},
+                                          "output": {"ran_while_squidbrake_was_unreachable": True},
+                                          "metadata": {"while_unreachable": True, "ran_at": ev.get("ran_at")}}, timeout=5)
+    except Exception:
+        pass
 
 
 def _risky(pol: dict, action: str | None, which: str, name: str, input: Any) -> tuple[bool, str]:

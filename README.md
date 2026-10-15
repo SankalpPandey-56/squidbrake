@@ -160,6 +160,9 @@ The incidents and the session benchmark run in CI, so they can't quietly stop be
 - **Real incidents:** [incidents/](incidents/) replays 11 public AI-agent incidents against the shipped rules.
   - Examples: Replit's production database, the Railway volume deletion, GitHub MCP, Supabase MCP, CurXecute.
   - **13 of 14 harmful actions are stopped.**
+- **Reported bypasses:** every way around Squidbrake that someone sent us is a test that must stay stopped on
+  every release ([tests/test_reported_bypasses.py](tests/test_reported_bypasses.py)): **16 of 16 stopped**, and
+  the everyday variants of each still run.
   - The one not stopped is listed and explained: a malicious MCP server adds a BCC inside itself, after the check.
 - **Whole sessions:** in [bench/chains/](bench/chains/), Squidbrake stops 64 of 65 harmful steps and holds 3 of 41
   routine ones. An allowlist stops 53 and holds 10.

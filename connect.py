@@ -44,6 +44,8 @@ import time
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR))
+import offline  # noqa: E402  (where the hooks' agent keys live)
 PYTHON = sys.executable
 HOOK = BASE_DIR / "claude_hook.py"
 MCP_SERVER = BASE_DIR / "gateway_mcp.py"
@@ -108,8 +110,8 @@ def previous_key(settings: dict, url: str) -> str | None:
     for g in settings.get("hooks", {}).get("PreToolUse", []):
         for h in g.get("hooks", []):
             a = h.get("args", [])
-            if any("claude_hook.py" in x for x in a) and "--key" in a and "--url" in a and a[a.index("--url") + 1] == url:
-                return a[a.index("--key") + 1]
+            if any("claude_hook.py" in x for x in a) and "--url" in a and a[a.index("--url") + 1] == url:
+                return a[a.index("--key") + 1] if "--key" in a else (offline.load_key(url) or None)
     return None
 
 
@@ -147,8 +149,9 @@ def claude_code(args) -> None:
             return
     key = args.key or previous_key(settings, args.url) or new_key("claude-code", args.url)
 
+    offline.save_key(args.url, key)          # the key stays out of settings.json, where the agent could read it
     hook_cmd = {"type": "command", "command": PYTHON,
-                "args": [str(HOOK), "--url", args.url, "--key", key, "--source", "claude-code"]}
+                "args": [str(HOOK), "--url", args.url, "--source", "claude-code"]}
     settings = strip_ours(settings)
     hooks = settings.setdefault("hooks", {})
     hooks.setdefault("PreToolUse", []).append({"matcher": "*", "hooks": [{**hook_cmd, "timeout": 600}]})
@@ -539,7 +542,8 @@ def agents(args) -> None:
                 print(f"{name}: hook removed")
             continue
         key = key or args.key or new_key("agents", args.url)
-        cmd = " ".join([_word(PYTHON), _word(str(AGENT_HOOK)), name, "--url", args.url, "--key", key])
+        offline.save_key(args.url, key)
+        cmd = " ".join([_word(PYTHON), _word(str(AGENT_HOOK)), name, "--url", args.url])
         t["edit"](data, cmd)
         _write_json(t["file"], data)
         print(f"{name}: hook added ({t['covers']})" + ("" if getattr(args, "brief", False) else f". Restart {name} to apply."))
@@ -608,6 +612,8 @@ def _hooked_gateway() -> tuple[str, str] | None:
         for c in cmds:
             if m := re.search(r"--url\s+\"?(\S+?)\"?\s+--key\s+\"?(gw_[A-Za-z0-9_\-]+)", c):
                 return m.group(1), m.group(2)
+            if (m := re.search(r"--url\s+\"?([^\s\"]+)", c)) and (key := offline.load_key(m.group(1))):
+                return m.group(1), key
     return None
 
 

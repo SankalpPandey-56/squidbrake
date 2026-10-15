@@ -55,7 +55,7 @@ def _arg(flag: str, env: str, default: str) -> str:
 
 
 GATEWAY_URL = _arg("--url", "GATEWAY_URL", "http://localhost:8080").rstrip("/")
-GATEWAY_API_KEY = _arg("--key", "GATEWAY_API_KEY", "")
+GATEWAY_API_KEY = _arg("--key", "GATEWAY_API_KEY", "") or (offline.load_key(GATEWAY_URL) if offline else "")
 SOURCE = _arg("--source", "GATEWAY_SOURCE", "claude-code")
 FAIL_OPEN = os.getenv("GATEWAY_FAIL_OPEN", "").lower() in ("1", "true", "yes")
 MAX_WAIT = float(os.getenv("GATEWAY_MAX_WAIT", "540"))  # stay under Claude Code's 600 s hook timeout

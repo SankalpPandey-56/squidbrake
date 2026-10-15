@@ -71,7 +71,8 @@ def test_connect_all_and_undo(tmp_path, monkeypatch, capsys):
 
     connect.main(["all", "--url", URL, "--key", KEY, "--yes"])
     claude = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert KEY in json.dumps(claude["hooks"]["PreToolUse"])
+    assert KEY not in json.dumps(claude["hooks"]["PreToolUse"]) and URL in json.dumps(claude["hooks"]["PreToolUse"])
+    assert connect.offline.load_key(URL) == KEY          # in a file only this user reads, not the agent's settings
     assert "agent_hook.py" in (home / ".cursor" / "hooks.json").read_text(encoding="utf-8")
     assert "agent_hook.py" in (home / ".codex" / "hooks.json").read_text(encoding="utf-8")
     assert not (home / ".gemini").exists()                                 # not installed: left alone

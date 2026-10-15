@@ -77,8 +77,12 @@ These are known and not fixed. Some can't be fixed at this layer.
    - If the agent changed it, it's flagged but runs (`edited_then_run: warn`), because fixing a script and running it
      is everyday work. Set `edited_then_run: review` to hold those too. **(test)** `test_threat_model.py`
    - Inline code (`python -c`) is held as hidden.
-   - `npx -y pkg`, `pip install pkg` and `curl ... -o x && ./x`-style downloads run code nobody has read. They are
-     recorded (`unknown: warn`), not held: holding every install would hold everyday work.
+   - `npx -y pkg` and `pip install pkg` run code nobody has read, and so do a new dependency's own install scripts
+     (they can't be read before it's downloaded). They're recorded (`unknown: warn`), not held: holding every
+     install would hold everyday work. Use `npm install --ignore-scripts` where you can.
+   - A file downloaded and then run, sourced or made runnable in the same conversation is held
+     (`curl -o x.sh URL` then `sh x.sh`). The same file run in a later conversation isn't connected to its
+     download.
 2. **What runs inside an approved or allowed program.** One allowed `terraform apply` or deploy script can do
    anything its credentials allow. Squidbrake sees the command, not what the program does afterwards.
 3. **Code inside an upstream MCP server.** A compromised server can add a hidden BCC after the call Squidbrake

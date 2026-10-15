@@ -589,6 +589,13 @@ def migrate(eng) -> None:
 
 migrate(engine)
 
+# Keys, the record, the link and ledger secrets and the rules: readable by this user only (POSIX; 600 / folder 700)
+import offline  # noqa: E402
+for _p in [KEYS_PATH.parent, *KEYS_PATH.parent.glob("*.db*"), *KEYS_PATH.parent.glob("*.key"),
+           *KEYS_PATH.parent.glob("*.json"), *([RULES_PATH] if HOME_DIR != BASE_DIR else [])]:
+    if _p.exists():
+        offline._private(_p)
+
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -1093,10 +1100,11 @@ class Policy:
                 wu = data.get("when_unreachable", "block")
                 wu = "allow" if wu is True or str(wu).lower() == "allow" else \
                     "block" if wu is False or str(wu).lower() in ("block", "deny") else \
-                    "block_risky" if str(wu).lower() == "block_risky" else None
+                    "block_risky" if str(wu).lower() == "block_risky" else \
+                    "warn" if str(wu).lower() == "warn" else None
                 if wu is None or any(str(r.get("when_unreachable", "block")).lower() not in ("allow", "block", "deny", "true", "false")
                                      for r in data.get("rules") or []):
-                    raise ValueError("when_unreachable must be block, block_risky or allow (a rule: block or allow)")
+                    raise ValueError("when_unreachable must be block, block_risky, warn or allow (a rule: block or allow)")
                 integ = str(data.get("integrity", "alert")).lower()
                 if integ not in ("alert", "fail_closed"):
                     raise ValueError("integrity must be alert or fail_closed")
@@ -1570,6 +1578,22 @@ def reported_runs(metadata: dict | None) -> list[tuple[str, str]]:
     return out[:60]
 
 
+def run_rule_signals(ev: "EventIn", client: str) -> list[dict]:
+    """What a script, Makefile target or package.json script runs, judged by the same rules and self-protection as a
+    command typed directly (command_signals reads its commands; this applies rules.yaml and selfguard to each line)."""
+    out: list[dict] = []
+    for via, line in reported_runs(ev.metadata):
+        inp = {"command": line}
+        if hit := selfguard.check("tool_call", ev.name, inp, ev.metadata, KEYS_PATH.parent):
+            return [{**hit, "message": f"This command runs {via}, which: {hit['message']}"}]
+        d, why, rid, _ = policy.evaluate(kind=ev.kind, name=ev.name, source=ev.source, client=client,
+                                         session_id=ev.session_id, input=inp)
+        if rid and d in ("deny", "review") and not any(o["rule"] == rid for o in out):
+            out.append({"check": "script_rule_command", "rule": rid, "effect": "block" if d == "deny" else "review",
+                        "message": f"This command runs {via}, which a rule holds: {why} ({line[:120]})"})
+    return out
+
+
 def command_signals(name: str, input: Any, metadata: dict | None = None) -> tuple[list[dict], bool]:
     """What a shell tool's command actually does (commands.py), including what it runs underneath when the hook
     read that (a Makefile target, a package.json script). -> (signals, only_reads)."""
@@ -1609,7 +1633,7 @@ def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
     if (cc["written_then_run"] == "off" and cc["edited_then_run"] == "off") or not ev.session_id             or not any(fnmatch.fnmatchcase(ev.name.lower(), t.lower()) for t in cc["tools"]):
         return []
     line = commands.command_of(ev.input)
-    scripts = commands.read(line).scripts if line else []
+    scripts = commands.executes(line) if line else []
     if not scripts:
         return []
     cwd = str((ev.metadata or {}).get("cwd") or "")
@@ -1617,7 +1641,7 @@ def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
     wanted = {norm(os.path.join(cwd, sp) if cwd and not os.path.isabs(sp) and not sp.startswith("~") else sp): sp
               for sp in scripts}
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat().replace("+00:00", "Z")
-    names = (WRITES_A_FILE if cc["written_then_run"] != "off" else ()) +         (EDITS_A_FILE if cc["edited_then_run"] != "off" else ())
+    names = (WRITES_A_FILE + tuple(cc["tools"]) if cc["written_then_run"] != "off" else ()) + (EDITS_A_FILE if cc["edited_then_run"] != "off" else ())
     rows = conn.execute(select(events.c.name, events.c.input).where(
         events.c.session_id == ev.session_id, events.c.created_at >= since, events.c.status.in_(("completed", "pending")),
         events.c.name.in_(names)).order_by(events.c.created_at.desc()).limit(200)).all()
@@ -1625,6 +1649,15 @@ def written_then_run(conn, ev: "EventIn", client: str) -> list[dict]:
         try:
             inp = json.loads(r.input) if r.input else {}
         except ValueError:
+            continue
+        if r.name not in WRITES_A_FILE + EDITS_A_FILE:      # a shell command: what it downloaded
+            got = commands.downloads(commands.command_of(inp) or "")
+            hit = next((sp for sp in scripts for d in got if norm(os.path.join(cwd, d) if cwd else d) ==
+                        norm(os.path.join(cwd, sp) if cwd and not os.path.isabs(sp) else sp)), None)
+            if hit:
+                return [{"check": "downloaded_then_run_command", "effect": "review",
+                         "message": f"This runs, sources or makes runnable {hit}, a file downloaded in this "
+                                    f"conversation ({(commands.command_of(inp) or '')[:100]}). Read it first."}]
             continue
         path = str(inp.get("file_path") or inp.get("path") or "") if isinstance(inp, dict) else ""
         hit = wanted.get(norm(path)) or next((sp for sp in scripts if not cwd and path and
@@ -1939,7 +1972,7 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
                 signals += history_signals(conn, ev.name, redact(ev.input), to_stored_json(ev.input), ev.source,
                                            ev.session_id, is_change=decision == "review" and not only_reads,
                                            client=client, only_reads=only_reads)
-                signals += data_signals(ev) + taint_signals(conn, ev, client) + command_found                     + written_then_run(conn, ev, client)
+                signals += data_signals(ev) + taint_signals(conn, ev, client) + command_found + run_rule_signals(ev, client)                     + written_then_run(conn, ev, client)
             blocking = next((s for s in signals if s["effect"] == "block"), None)
             needs_person = next((s for s in signals if s["effect"] == "review"), None)
             signal_id = lambda s: f"sequence:{s['rule']}" if s["check"] == "sequence" else \
@@ -2036,6 +2069,9 @@ def record_event(ev: EventIn, client: str, client_ip: str | None) -> Decision:
               session_id=ev.session_id, status=status, decision=decision, rule_id=rule_id, reason=reason,
               input_sha256=_sha(row["input"]), output_sha256=_sha(row["output"]),
               signals=[f"{x['check']}:{x['effect']}" for x in signals] or None, would=would)
+        if (ev.metadata or {}).get("while_unreachable"):   # warn-only mode: it ran while nothing checked it
+            audit(conn, client, "protection.was_off", row["id"], name=ev.name, source=ev.source,
+                  at=(ev.metadata or {}).get("ran_at"))
         if rule_id == "self-protection:approval":    # high severity: an agent reaching for the approval path
             audit(conn, client, "security.self_approval_attempt", row["id"], name=ev.name, source=ev.source,
                   session_id=ev.session_id, reason=reason)
