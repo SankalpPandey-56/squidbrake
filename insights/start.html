@@ -65,7 +65,7 @@ if (D.hosted && !D.missing) {
   const manual = `pipx install squidbrake\nsquidbrake pilot join ${D.code} --server ${D.server}`;
   app.innerHTML = `
     <div class="brand">Squid<span>brake</span></div>
-    <h1>Hi ${esc(D.company)}, let's put a brake on your AI agents</h1>
+    <h1>Hi ${esc(D.company)}: your agents propose, your team approves</h1>
     <p class="lead">Squidbrake checks every action your agent takes before it runs. Reading code runs on its own,
       changes wait for your OK, and dangerous commands (wiping a folder, printing your <code>.env</code>, dropping a table)
       are blocked. It runs on your machine. Setup takes about 3 minutes.</p>
@@ -139,7 +139,7 @@ function hostedPage() {
   });
   app.innerHTML = `
     <div class="brand">Squid<span>brake</span></div>
-    <h1>Hi ${esc(D.company)}, let's put a brake on your AI agents</h1>
+    <h1>Hi ${esc(D.company)}: your agents propose, your team approves</h1>
     <p class="lead">Squidbrake checks every action your AI agent takes before it runs: reading code runs on its own,
       changes wait for your OK (on your phone too), and dangerous commands are blocked. Your dashboard runs on our server,
       so there's nothing to keep open on your laptop. Three steps, about 2 minutes.</p>

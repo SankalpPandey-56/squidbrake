@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.batrapulkit/squidbrake",
   "title": "Squidbrake",
-  "description": "Change control for AI agents: every MCP tool call on the record; risky ones wait for a person.",
+  "description": "Change control for AI agents: risky actions wait for a person; every action on the record.",
   "repository": {
     "url": "https://github.com/batrapulkit/squidbrake",
     "source": "github"
