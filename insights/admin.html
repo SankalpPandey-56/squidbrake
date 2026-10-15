@@ -378,6 +378,26 @@ const ago = (iso) => {
   return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
 };
 let d_latest = "";
+// All time usage: every day's counts the server has ever received, per pilot (the page above shows the last 14 days)
+async function toggleAllTime() {
+  const box = document.getElementById("alltime"), btn = document.getElementById("alltime-btn");
+  if (!box.hidden) { box.hidden = true; btn.setAttribute("aria-expanded", "false"); btn.textContent = "All time usage"; return; }
+  box.hidden = false; btn.setAttribute("aria-expanded", "true"); btn.textContent = "Hide all time usage";
+  box.innerHTML = `<div class="sub">Loading...</div>`;
+  try {
+    const a = await api("/v1/admin/all-time"), t = a.pilots_total, i = a.individuals_total, n = (x) => (x || 0).toLocaleString();
+    const rows = a.pilots.filter((p) => p.events || p.active_days).map((p) => `<tr><td><b>${esc(p.community ? "Individual installs" : p.company)}</b></td>
+      <td class="n">${n(p.events)}</td><td class="n">${n(p.held)}</td><td class="n">${n(p.approved)}</td><td class="n">${n(p.rejected)}</td>
+      <td class="n">${n(p.blocked)}</td><td class="n">${n((p.would_block || 0) + (p.would_hold || 0))}</td><td class="n">${n(p.legit)}</td>
+      <td class="n">${p.active_days}</td><td>${esc(p.first_day || "–")} → ${esc(p.last_day || "–")}</td></tr>`).join("");
+    box.innerHTML = `<h3>All time usage</h3><span class="sub">Every day's counts received since ${esc(a.since || "the start")}.
+      Pilots: <b>${n(t.events)}</b> agent actions, <b>${n(t.held)}</b> held, <b>${n(t.blocked)}</b> blocked.
+      Individual installs: <b>${n(i.events)}</b> agent actions.</span>
+      <div style="overflow-x:auto;margin-top:10px"><table class="inner" style="width:100%"><thead><tr><th>Pilot</th><th>Actions</th>
+      <th>Held</th><th>Approved</th><th>Rejected</th><th>Blocked</th><th>Would have (observe)</th><th>Marked legit</th>
+      <th>Active days</th><th>First → last day</th></tr></thead><tbody>${rows || `<tr><td colspan="10" class="sub">No usage yet.</td></tr>`}</tbody></table></div>`;
+  } catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
 const STAGE = { "active": ["Active", "s-active"], "installed": ["Installed, no activity yet", "s-installed"],
   "quiet": ["Gone quiet", "s-quiet"], "opened link": ["Opened the link", "s-opened"], "link sent": ["Link sent", "s-sent"],
   "left": ["Left the pilot", "s-left"], "setting up": ["Setting up", "s-installed"], "keys taken": ["Took keys, not connected yet", "s-opened"],
@@ -508,6 +528,8 @@ async function load() {
     await api(`/v1/admin/pilots/${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" }); load();
   });
   document.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => copy(b.dataset.copy, b));
+  const atBtn = document.getElementById("alltime-btn");
+  if (atBtn) atBtn.onclick = toggleAllTime;
   document.querySelectorAll("[data-more]").forEach(fold);
   document.querySelectorAll("[data-oc], [data-co]").forEach((b) => b.onclick = () => {
     if (b.dataset.oc !== undefined) filter.oc = b.dataset.oc; else filter.co = b.dataset.co;
@@ -666,12 +688,14 @@ function overview(d, inv, asks) {
         <p class="ov-lede"><b>${plural(wk.events, "agent action", "agent actions")}</b> went through it this week, <b>${plural(wk.held, "was", "were")} held</b> for a person
           and <b>${plural(sc.stopped, "risky action was", "risky actions were")} stopped</b>.</p>
         <div class="fixes">${fixHtml}</div>
-        <div style="margin-top:14px"><button class="btn" data-copy="${esc(weeklyReport(d))}">Copy weekly report</button></div></div>
+        <div style="margin-top:14px"><button class="btn" data-copy="${esc(weeklyReport(d))}">Copy weekly report</button>
+          <button class="btn" id="alltime-btn" aria-expanded="false" aria-controls="alltime">All time usage</button></div></div>
       <div class="chart-card"><div class="top-row"><div><div class="k">Agent actions, last 14 days</div><div class="big">${thisWk.toLocaleString()}</div>
           <div class="k" style="margin-top:4px">this week${lastWk ? ` · ${lastWk.toLocaleString()} the week before` : ""}</div></div>${deltaChip(wow)}</div>
         ${areaChart(daily)}<div class="axis"><span>${fmtDay((d.span || [])[0])}</span><span>${fmtDay((d.span || [])[7])}</span><span>today</span></div></div>
     </div>
     <div class="kpis">${kpis}</div>
+    <div id="alltime" class="ov-card" hidden style="margin-top:16px"></div>
     <div class="ov-row">
       <div class="ov-card"><h3>From pilot link to paying</h3><span class="sub">How many pilots reach each step. Between the columns: the share that made it to the next one (red under 60%).</span>
         ${funnel.length ? `<div class="pipe">${cols}</div><div class="pipe-l">${labels}</div>` : `<div class="sub">No pilots yet.</div>`}</div>

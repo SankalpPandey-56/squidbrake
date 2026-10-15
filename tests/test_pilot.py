@@ -393,3 +393,29 @@ def test_where_installs_come_from(insights):
     assert rows["linkedin"]["clicks"] >= 2 and rows["linkedin"]["installs"] == 1
     assert rows["linkedin"]["used_this_week"] == 1 and rows["linkedin"]["stopped"] == 1
     assert rows["not said"]["installs"] >= 1 and rows["not said"]["stopped"] == 0
+
+
+def test_all_time_usage_counts_every_day_ever_received(insights, tmp_path, monkeypatch):
+    """The overview shows the last 14 days; All time usage adds up every day the server has kept."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+    import app as insights_app
+    admin = {"X-Admin-Key": "admin-test-key"}
+    code = insights.post("/v1/admin/pilots", headers=admin, json={"company": "Forever Co"}).json()["code"]
+    path_of = lambda url: "/" + url.split("://", 1)[1].split("/", 1)[1]
+    monkeypatch.setattr(pilot.httpx, "post", lambda url, json, timeout: insights.post(path_of(url), json=json))
+    assert pilot.join(tmp_path, code, "http://localhost", True, "1.0") == 0
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert pilot.send(tmp_path, {"version": "1.0", "days": {today: {"events": 7, "held": 2, "blocked": 1, "legit": 1}}})
+    old = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")   # kept from a ping 60 days ago
+    with insights_app.db() as c:
+        c.execute("INSERT INTO days (install_id, day, counts) VALUES (?,?,?)",
+                  (pilot.load(tmp_path)["install_id"], old, _json.dumps({"events": 30, "held": 5})))
+    assert insights.get("/v1/admin/all-time").status_code == 401                     # admins only
+    a = insights.get("/v1/admin/all-time", headers=admin).json()
+    me = next(p for p in a["pilots"] if p["code"] == code)
+    assert (me["events"], me["held"], me["blocked"], me["legit"]) == (37, 7, 1, 1)
+    assert (me["active_days"], me["first_day"], me["last_day"]) == (2, old, today)
+    assert a["pilots_total"]["events"] >= 37 and a["since"] <= old
+    week = next(p for p in insights.get("/v1/admin/overview", headers=admin).json()["pilots"] if p["code"] == code)
+    assert week["week"]["events"] == 7                                             # the overview is unchanged

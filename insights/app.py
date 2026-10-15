@@ -550,6 +550,66 @@ def rule_approvals(caught: list[dict]) -> list[dict]:
     return out
 
 
+@app.get("/v1/admin/all-time", dependencies=[Depends(admin)])
+def all_time():
+    """Every day's counts ever received, per pilot and in total (the overview shows the last 14 days)."""
+    with db() as c:
+        pilots = [dict(r) for r in c.execute("SELECT code, company FROM pilots")]
+        code_of = dict(c.execute("SELECT install_id, code FROM installs"))
+        days = c.execute("SELECT install_id, day, counts FROM days").fetchall()
+    per: dict[str, dict] = {p["code"]: {"code": p["code"], "company": p["company"], "community": p["code"] == COMMUNITY_CODE,
+                                        "days": set(), **{k: 0 for k in SUMS}} for p in pilots}
+    for iid, day, counts in days:
+        row = per.get(code_of.get(iid))
+        if row is None:
+            continue
+        cnt = json.loads(counts)
+        for k in SUMS:
+            row[k] += cnt.get(k, 0)
+        if cnt.get("events"):
+            row["days"].add(day)
+    rows = []
+    for r in per.values():
+        active = sorted(r.pop("days"))
+        rows.append({**r, "active_days": len(active), "first_day": active[0] if active else None,
+                     "last_day": active[-1] if active else None})
+    rows.sort(key=lambda r: -r["events"])
+    total = lambda rs: {k: sum(r[k] for r in rs) for k in SUMS}
+    named = [r for r in rows if not r["community"]]
+    return {"pilots": rows, "pilots_total": total(named), "individuals_total": total([r for r in rows if r["community"]]),
+            "since": min((r["first_day"] for r in rows if r["first_day"]), default=None)}
+
+
+@app.get("/v1/admin/all-time", dependencies=[Depends(admin)])
+def all_time():
+    """Every day's counts ever received, per pilot and in total (the overview shows the last 14 days)."""
+    with db() as c:
+        pilots = [dict(r) for r in c.execute("SELECT code, company FROM pilots")]
+        code_of = dict(c.execute("SELECT install_id, code FROM installs"))
+        days = c.execute("SELECT install_id, day, counts FROM days").fetchall()
+    per: dict[str, dict] = {p["code"]: {"code": p["code"], "company": p["company"], "community": p["code"] == COMMUNITY_CODE,
+                                        "days": set(), **{k: 0 for k in SUMS}} for p in pilots}
+    for iid, day, counts in days:
+        row = per.get(code_of.get(iid))
+        if row is None:
+            continue
+        cnt = json.loads(counts)
+        for k in SUMS:
+            row[k] += cnt.get(k, 0)
+        if cnt.get("events"):
+            row["days"].add(day)
+    rows = []
+    for r in per.values():
+        active = sorted(r.pop("days"))
+        rows.append({**r, "active_days": len(active), "first_day": active[0] if active else None,
+                     "last_day": active[-1] if active else None})
+    rows.sort(key=lambda r: -r["events"])
+    total = lambda rs: {k: sum(r[k] for r in rs) for k in SUMS}
+    named = [r for r in rows if not r["community"]]
+    return {"pilots": rows, "pilots_total": total(named), "individuals_total": total([r for r in rows if r["community"]]),
+            "since": min((r["first_day"] for r in rows if r["first_day"]), default=None)}
+
+
 @app.get("/v1/admin/overview", dependencies=[Depends(admin)])
 def overview(request: Request):
     today = datetime.now(timezone.utc).date()
