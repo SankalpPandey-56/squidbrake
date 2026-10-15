@@ -378,6 +378,8 @@ const ago = (iso) => {
   return s < 90 ? "just now" : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
 };
 let d_latest = "";
+let range = (() => { try { return localStorage.getItem("sb-range") || "all"; } catch { return "all"; } })();
+function setRange(r) { range = r; try { localStorage.setItem("sb-range", r); } catch {} load(); }
 // All time usage: every day's counts the server has ever received, per pilot (the page above shows the last 14 days)
 async function toggleAllTime() {
   const box = document.getElementById("alltime"), btn = document.getElementById("alltime-btn");
@@ -530,6 +532,7 @@ async function load() {
   document.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => copy(b.dataset.copy, b));
   const atBtn = document.getElementById("alltime-btn");
   if (atBtn) atBtn.onclick = toggleAllTime;
+  document.querySelectorAll("[data-range]").forEach((b) => b.onclick = () => setRange(b.dataset.range));
   const atNav = document.getElementById("alltime-nav");
   if (atNav) atNav.onclick = async (e) => {           // from the top menu: open it (never close it) and go there
     e.preventDefault();
@@ -616,6 +619,14 @@ function overview(d, inv, asks) {
   const catches = pilots.flatMap((p) => (p.catches || []).map((x) => ({ ...x, company: p.company })))
     .filter((x) => STOPPED.includes(x.outcome) && !PAUSED_RULES.includes(x.rule)).sort((a, b) => (b.t || "").localeCompare(a.t || ""));
   const decided = wk.approved + wk.rejected + wk.timed_out;
+  // the hero and the counts below it: all time by default (d.pilots_all_time), or this week
+  const all = range === "all" && d.pilots_all_time, W = all ? d.pilots_all_time : wk, when = all ? "since the start" : "this week";
+  const stoppedN = all ? (W.rejected || 0) + (W.blocked || 0) : sc.stopped;
+  const decidedN = (W.approved || 0) + (W.rejected || 0) + (W.timed_out || 0);
+  const approveRate = all ? (decidedN ? Math.round(100 * W.approved / decidedN) : null) : sc.approve_rate;
+  const rangeBtns = `<div class="seg" role="group" aria-label="Show counts for">
+    <button data-range="all" class="${all ? "on" : ""}" aria-pressed="${!!all}">All time</button>
+    <button data-range="week" class="${all ? "" : "on"}" aria-pressed="${!all}">This week</button></div>`;
   const plural = (n, one, many) => `${Number(n).toLocaleString()} ${n === 1 ? one : many}`;
 
   // the 14-day chart: every pilot's actions per day
@@ -637,19 +648,19 @@ function overview(d, inv, asks) {
   const weeks = inv ? inv.weeks : [];
   const kpi = (cls, tone, icon, k, v, n, extra = "") => `<div class="kpi ${cls}" style="--tone:${tone}"><div class="k"><i>${icon}</i>${k}</div>
     <div class="v">${v}</div>${n ? `<div class="n">${n}</div>` : ""}${extra}</div>`;
-  const heldShare = wk.events ? Math.round(1000 * wk.held / wk.events) / 10 : 0;
+  const heldShare = W.events ? Math.round(1000 * W.held / W.events) / 10 : 0;
   const kpis = [
     kpi("", "var(--ok)", "●", "Active pilots", `${active}<small>of ${pilots.length}</small>`, `${active3} active 3+ days ${deltaChip(inv ? inv.active_pilots_wow : null)}`,
         spark(weeks.map((w) => w.active_pilots))),
-    kpi("", "var(--c-approved)", "↯", "Agent actions", wk.events.toLocaleString(), `this week ${deltaChip(inv ? inv.actions_wow : null)}`, spark(daily)),
-    kpi("", "var(--warn)", "⏸", "Held for a person", wk.held.toLocaleString(),
+    kpi("", "var(--c-approved)", "↯", "Agent actions", W.events.toLocaleString(), all ? "all time" : `this week ${deltaChip(inv ? inv.actions_wow : null)}`, spark(daily)),
+    kpi("", "var(--warn)", "⏸", "Held for a person", W.held.toLocaleString(),
         inv && inv.median_seconds_to_decide !== null ? `${heldShare}% of actions · decided in ${fmtSecs(inv.median_seconds_to_decide)}` : `${heldShare}% of actions`,
         `<div class="meter"><i style="width:${Math.min(100, heldShare * 5)}%"></i></div>`),
-    kpi(sc.stopped ? "hot" : "", "var(--accent)", "✋", "Real catches", sc.stopped,
-        [savedText(sc.saved) ? savedText(sc.saved) + " saved" : "rejected or blocked", sc.paused ? `${sc.paused} emergency-stop pauses not counted` : ""].filter(Boolean).join(" · ")),
-    `<div class="kpi${sc.approve_rate > 90 ? " warn" : ""}" style="--tone:${sc.approve_rate > 90 ? "var(--warn)" : "var(--ok)"}"><div class="k"><i>✓</i>Holds approved</div>
-      ${gauge(sc.approve_rate)}<div class="gauge-v">${sc.approve_rate === null ? "–" : sc.approve_rate + "%"}</div>
-      <div class="n">${sc.approve_rate > 90 ? "Over the 90% mark: rules hold routine work" : "The mark is 90%: above it, rules hold routine work"}</div></div>`,
+    kpi(stoppedN ? "hot" : "", "var(--accent)", "✋", "Real catches", stoppedN,
+        all ? "rejected or blocked, all time" : [savedText(sc.saved) ? savedText(sc.saved) + " saved" : "rejected or blocked", sc.paused ? `${sc.paused} emergency-stop pauses not counted` : ""].filter(Boolean).join(" · ")),
+    `<div class="kpi${approveRate > 90 ? " warn" : ""}" style="--tone:${approveRate > 90 ? "var(--warn)" : "var(--ok)"}"><div class="k"><i>✓</i>Holds approved</div>
+      ${gauge(approveRate)}<div class="gauge-v">${approveRate === null ? "–" : approveRate + "%"}</div>
+      <div class="n">${approveRate > 90 ? "Over the 90% mark: rules hold routine work" : "The mark is 90%: above it, rules hold routine work"}</div></div>`,
     kpi("", "#a855f7", "$", "Paying", inv ? inv.paying.length : 0, inv ? `$${inv.mrr.toLocaleString()} MRR · $${inv.arr.toLocaleString()} ARR` : ""),
   ].join("");
 
@@ -691,8 +702,9 @@ function overview(d, inv, asks) {
     <div class="hero">
       <div class="hero-l"><span class="eyebrow">Week ${weekNo} · ${new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</span>
         <h1 class="ov-title">${active ? `${active} of ${pilots.length} pilots are using Squidbrake` : "No pilot is using Squidbrake yet"}</h1>
-        <p class="ov-lede"><b>${plural(wk.events, "agent action", "agent actions")}</b> went through it this week, <b>${plural(wk.held, "was", "were")} held</b> for a person
-          and <b>${plural(sc.stopped, "risky action was", "risky actions were")} stopped</b>.</p>
+        <div style="margin:6px 0 2px">${rangeBtns}</div>
+        <p class="ov-lede"><b>${plural(W.events, "agent action", "agent actions")}</b> went through it ${when}, <b>${plural(W.held, "was", "were")} held</b> for a person
+          and <b>${plural(stoppedN, "risky action was", "risky actions were")} stopped</b>.</p>
         <div class="fixes">${fixHtml}</div>
         <div style="margin-top:14px"><button class="btn" data-copy="${esc(weeklyReport(d))}">Copy weekly report</button>
           <button class="btn" id="alltime-btn" aria-expanded="false" aria-controls="alltime">All time usage</button></div></div>

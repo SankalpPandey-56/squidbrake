@@ -706,6 +706,7 @@ def overview(request: Request):
     pilots_week = {k: sum(p["week"][k] for p in named) for k in SUMS}
     community = next((p for p in out if p["community"]), None)
     return {"span": span, "pilots": out, "week": totals, "pilots_week": pilots_week, "latest_version": latest or None,
+            "pilots_all_time": all_time()["pilots_total"],
             "active_pilots": sum(1 for p in named if p["stage"] == "active"),
             "installs": sum(p["installs"] for p in out), "scorecard": scorecard(named, pilots_week),
             "community": community_block(community, [i for i in installs if i["code"] == COMMUNITY_CODE], by_install, span, latest)}
