@@ -742,8 +742,12 @@ _SECRET = re.compile(r"\$\((env|printenv|set|export\s+-p)\)|`(env|printenv)`|(^|
 
 def downloads(line: str) -> list[str]:
     """Files a command line writes from the network: curl -o F / -O, wget [-O F] URL, Invoke-WebRequest -OutFile F."""
+    return _downloaded(read(line).commands)
+
+
+def _downloaded(cmds: list[Command]) -> list[str]:
     out = []
-    for c in read(line).commands:
+    for c in cmds:
         w, low = c.words, [x.lower() for x in c.words]
         url = next((_unquote(x) for x in w[1:] if re.match(r"^['\"]?https?://", x)), "")
         name = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] if url else ""
@@ -765,7 +769,10 @@ def downloads(line: str) -> list[str]:
 
 def executes(line: str) -> list[str]:
     """Files a command line runs, sources or makes runnable: scripts, `source f`, `. f`, `chmod +x f`."""
-    reading = read(line)
+    return _ran(read(line))
+
+
+def _ran(reading: "Reading") -> list[str]:
     found = list(reading.scripts)
     for c in reading.commands:
         if c.program in ("source", ".") and len(c.words) > 1:
@@ -857,7 +864,12 @@ def read(line: str) -> Reading:
     """What a command line does. Never runs anything."""
     commands, hidden = _read(line or "")
     writes = any(t.lower() not in _HARMLESS_TARGETS for t in _REDIRECT_OUT.findall(_unquoted(line or "")))
-    return Reading(commands=commands, hidden=list(dict.fromkeys(hidden)), writes_files=writes)
+    r = Reading(commands=commands, hidden=list(dict.fromkeys(hidden)), writes_files=writes)
+    # `curl URL -o x.sh && sh x.sh`: downloaded and run in one line (across tool calls, server.written_then_run)
+    name = lambda f: f.replace("\\", "/").removeprefix("./")
+    if both := {name(f) for f in _downloaded(commands)} & {name(f) for f in _ran(r)}:
+        r.hidden.append(f"downloads {sorted(both)[0]} and runs it in the same command, so it can't be read first")
+    return r
 
 
 def _unquoted(line: str) -> str:
