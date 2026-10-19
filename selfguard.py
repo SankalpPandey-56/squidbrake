@@ -78,6 +78,83 @@ def _touches_data(texts: list[str], cwd: str, data_dir: Path) -> str | None:
     return None
 
 
+# Commands that read or copy a whole folder tree: pointed at a folder that holds Squidbrake's keys, they take them too.
+RECURSIVE = {"find", "grep", "egrep", "rg", "ag", "ack", "cp", "tar", "zip", "7z", "rsync", "scp",
+             "robocopy", "xcopy", "copy-item", "select-string", "compress-archive"}
+FOLDER_TOOLS = {"grep", "search_files"}            # tools that read the contents of a whole folder
+_VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?|%([A-Za-z_][A-Za-z0-9_]*)%")
+
+
+def _real(path: str) -> str:
+    try:
+        return os.path.normcase(os.path.realpath(path)).replace("\\", "/")
+    except (OSError, ValueError):
+        return _norm(path)
+
+
+def _protected(data_dir: Path) -> tuple[set[str], set[str]]:
+    """(folders nothing may touch: the data folder and Squidbrake's home, by their real paths, symlinks followed;
+    folders above them, which a recursive read or copy would sweep up)."""
+    homes = {data_dir.parent} if data_dir.parent.name.lower().startswith(".squidbrake") else set()
+    homes.add(Path.home() / ".squidbrake")
+    inside = {_real(str(data_dir))} | {_real(str(h)) for h in homes} | {_real(str(h / "data")) for h in homes}
+    above = set()
+    for d in inside:
+        parent = d.rsplit("/", 1)[0]
+        while parent and parent not in above:
+            above.add(parent)
+            parent = parent.rsplit("/", 1)[0] if "/" in parent else ""
+    return inside, above
+
+
+def _resolve(token: str, cwd: str, env: dict) -> list[str]:
+    """Every real path a word can name here: ~ and variables expanded, relative to cwd, globs listed, symlinks followed."""
+    t = token.strip("'\"")
+    t = _VAR.sub(lambda m: env.get(m.group(1) or m.group(2), os.environ.get(m.group(1) or m.group(2), m.group(0))), t)
+    t = os.path.expanduser(t)
+    if not os.path.isabs(t) and cwd:
+        t = os.path.join(cwd, t)
+    if any(c in t for c in "*?["):
+        import glob
+        found = glob.glob(t)[:200]
+        return [_real(f) for f in found] or [_norm(t)]
+    return [_real(t)]
+
+
+def _paths_used(name: str, input, cwd: str) -> list[tuple[str, bool]]:
+    """(real path, recursive?) for each path the call names; `cd` and VAR=... earlier on a command line are followed."""
+    out: list[tuple[str, bool]] = []
+    if not isinstance(input, dict):
+        return out
+    if "command" in input or "cmd" in input:
+        try:
+            import commands
+        except ImportError:
+            return out
+        env: dict[str, str] = {}
+        line = str(input.get("command") or input.get("cmd") or "")
+        for c in commands.read(line).commands:
+            words = c.words
+            while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):      # VAR=value cmd ...
+                k, v = words[0].split("=", 1)
+                env[k] = _resolve(v, cwd, env)[0] if ("/" in v or v.startswith("~")) else v
+                words = words[1:]
+            if not words:
+                continue
+            prog = c.program
+            args = [w for w in words[1:] if not w.startswith("-") or "/" in w]
+            if prog in ("cd", "pushd", "set-location", "sl", "chdir") and args:
+                cwd = _resolve(args[0], cwd, env)[0]
+                continue
+            recursive = prog in RECURSIVE or any(f in words for f in ("-r", "-R", "-a", "--recursive", "-Recurse"))
+            out += [(r, recursive) for a in args for r in _resolve(a, cwd, env)]
+        return out
+    for k in ("file_path", "path", "notebook_path"):
+        if isinstance(input.get(k), str) and input[k]:
+            out += [(r, name.lower() in FOLDER_TOOLS) for r in _resolve(input[k], cwd, {})]
+    return out
+
+
 def check(kind: str | None, name: str, input, metadata: dict | None, data_dir: Path) -> dict | None:
     """-> {"check": "approval" | "tamper", "effect": "block" | "review", "message"} or None."""
     if kind == "prompt":
@@ -92,6 +169,14 @@ def check(kind: str | None, name: str, input, metadata: dict | None, data_dir: P
     cwd = str((metadata or {}).get("cwd") or "")
     joined = "\n".join(texts)
     say = lambda check, effect, message: {"check": check, "effect": effect, "message": message}
+    inside, above = _protected(data_dir)
+    for real, recursive in _paths_used(name, input, cwd):
+        if any(real == d or real.startswith(d + "/") for d in inside):
+            return say("approval", "block", f"This reads or changes Squidbrake's own keys and records ({real}). An "
+                                            "agent can't: with them it could approve its own actions.")
+        if recursive and real in above:
+            return say("approval", "review", f"This reads or copies a whole folder ({real}) that holds Squidbrake's "
+                                             "keys, so a person checks it first.")
     if (hit := _touches_data(texts, cwd, data_dir)) is not None:
         return say("approval", "block", f"This reads or changes Squidbrake's own keys and records ({hit}). An agent "
                                         "can't: with them it could approve its own actions.")

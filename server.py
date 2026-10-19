@@ -311,6 +311,7 @@ class KeyStore:
         except OSError:
             pass
         os.replace(tmp, self.path)
+        integrity.note_keys(self.path.parent)        # our own change to the keys, not tampering
 
     def _guard_env(self) -> None:
         if self.from_env:
@@ -2867,9 +2868,11 @@ _integrity_lock = threading.Lock()   # the minute check and `integrity accept` n
 def check_integrity() -> list[dict]:
     """Compare with the copy kept the first time; a new change is recorded once and sent where approvals go."""
     with _integrity_lock:
-        now = {**integrity.current(*_integrity_inputs()), "version": VERSION}
+        now = {**integrity.current(*_integrity_inputs()), "version": VERSION, "keys": integrity.keys_state(KEYS_PATH.parent)}
         changes = integrity.compare(KEYS_PATH.parent, now)
-        if changes and all(c["kind"] == "rules" or (c["kind"] == "hooks" and c["change"] == "added") for c in changes):
+        # a person's rules edit, a newly connected agent, a secret made the first time: the new normal
+        if changes and all(c["kind"] == "rules" or (c["kind"] in ("hooks", "keys") and c["change"] == "added")
+                           for c in changes):
             integrity.accept(KEYS_PATH.parent, now)      # a person's edits, a newly connected agent: the new normal
             with audited_tx() as conn:
                 audit(conn, "gateway", "integrity.noted", None, changes=changes)
@@ -2890,7 +2893,8 @@ def check_integrity() -> list[dict]:
 
 def accept_integrity(who: str) -> None:
     with _integrity_lock:
-        integrity.accept(KEYS_PATH.parent, {**integrity.current(*_integrity_inputs()), "version": VERSION})
+        integrity.accept(KEYS_PATH.parent, {**integrity.current(*_integrity_inputs()), "version": VERSION,
+                                            "keys": integrity.keys_state(KEYS_PATH.parent)})
         with audited_tx() as conn:
             state_set(conn, "integrity", {"changes": [], "at": utcnow()})
             audit(conn, who, "integrity.accepted", None)
@@ -2908,7 +2912,7 @@ async def _integrity_loop():
             await run_in_threadpool(check_integrity)
         except Exception:
             log.exception("integrity check failed")
-        await asyncio.sleep(60)
+        await asyncio.sleep(15)          # keys.json changed behind Squidbrake's back: said within seconds
 
 
 CAUGHT_ORDER = {"blocked": 0, "rejected": 1, "would have been blocked": 2, "would have waited for a person": 3}

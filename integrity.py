@@ -5,6 +5,8 @@ made the first time (data/integrity.json):
   hooks      Squidbrake's own hook lines in each agent's config (other settings in those files may change freely)
   package    the installed program's files (a pip / uv / pipx install; a checkout being worked on isn't checked)
   rules      rules.yaml (a person edits it, so this is only recorded; the policy history keeps every version anyway)
+  keys       keys.json, secret.key and ledger.key: Squidbrake's own changes (Team, `add-key`) are noted as they happen;
+             any other change is tampering (alert, audit entry, and with fail_closed risky actions stop)
 
 Not alerts, only recorded and taken as the new normal: an agent newly connected (its hook added), an upgrade (the
 version changed, so the package's files did too), and rules.yaml edits.
@@ -19,6 +21,7 @@ import json
 from pathlib import Path
 
 NAME = "integrity.json"
+KEY_FILES = ("keys.json", "secret.key", "ledger.key")     # who may approve, the link secret, the ledger key
 
 
 def _sha(data: bytes) -> str:
@@ -53,6 +56,27 @@ def current(rules: Path, package: Path | None, hooks: dict[str, Path]) -> dict[s
     return state
 
 
+def keys_state(data_dir: Path) -> dict[str, str | None]:
+    out: dict[str, str | None] = {}
+    for f in KEY_FILES:
+        try:
+            out[f] = _sha((data_dir / f).read_bytes())
+        except OSError:
+            out[f] = None
+    return out
+
+
+def note_keys(data_dir: Path) -> None:
+    """Squidbrake itself just changed its keys (Team, `squidbrake add-key`): that is the new normal, not tampering."""
+    path = data_dir / NAME
+    try:
+        was = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    was["keys"] = keys_state(data_dir)
+    path.write_text(json.dumps(was, indent=1), encoding="utf-8")
+
+
 def compare(data_dir: Path, now: dict) -> list[dict]:
     """What differs from the copy kept the first time (made now if there is none). -> [{kind, what, change}]"""
     path = data_dir / NAME
@@ -61,9 +85,12 @@ def compare(data_dir: Path, now: dict) -> list[dict]:
     except (OSError, ValueError):
         accept(data_dir, now)
         return []
+    if "keys" in now and "keys" not in was:                  # a copy kept before keys were watched: start now
+        was["keys"] = now["keys"]
+        accept(data_dir, was)
     out = []
     upgraded = was.get("version") != now.get("version")      # a new release replaces the package's files
-    for kind in ("hooks", "package", "rules"):
+    for kind in ("hooks", "package", "rules", "keys"):
         if kind == "package" and upgraded:
             continue
         before, after = was.get(kind) or {}, now.get(kind) or {}
@@ -80,6 +107,6 @@ def accept(data_dir: Path, now: dict) -> None:
 
 
 def describe(changes: list[dict]) -> str:
-    words = {"hooks": "Squidbrake's hook in", "package": "the installed file", "rules": ""}
+    words = {"hooks": "Squidbrake's hook in", "package": "the installed file", "rules": "", "keys": "Squidbrake's key file"}
     return "; ".join(f"{words[c['kind']]} {c['what']} {c['change']}".strip() for c in changes[:8]) + \
         (f" and {len(changes) - 8} more" if len(changes) > 8 else "")

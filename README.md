@@ -218,6 +218,11 @@ is not a sandbox against an agent deliberately trying to escape.
 
 - **It doesn't see** code running inside an allowed program or an MCP server, a background process started earlier,
   a tool that isn't connected, or someone with admin rights on the machine.
+- **When the agent and Squidbrake run as the same OS user,** a program the agent was allowed to run can read
+  whatever that user can. Squidbrake finds its keys by real path (symlinks, globs and `cd` followed). It alerts within
+  seconds if a key file changes, and approvals come only from the dashboard, a phone or Slack. To close the gap
+  fully, run the gateway as another user or on a server, so the agent's computer only ever holds a key that can ask
+  and never approve. Details: [THREAT_MODEL.md](THREAT_MODEL.md#when-the-agent-and-squidbrake-run-as-the-same-user).
 - **It doesn't make an over-privileged agent safe.** Use it with least-privilege credentials, and a container or VM
   for untrusted work.
 - **While the gateway is down** (`when_unreachable: block_risky`, the default):

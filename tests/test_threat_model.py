@@ -154,3 +154,21 @@ def test_threat_model_names_every_open_gap():
     text = (ROOT / "THREAT_MODEL.md").read_text(encoding="utf-8")
     for gap in ("test_iam_escalation_chain_is_held", "What Squidbrake does not stop", "block_risky"):
         assert gap in text
+
+
+def test_keys_changed_behind_squidbrakes_back_are_an_alert(machine):
+    data = machine["data"]
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "keys.json").write_text('{"keys": {}}')
+    assert server.check_integrity() == []                         # first look: kept as the normal
+    ks = server.KeyStore(data / "keys.json")
+    ks.add("priya", approver=True, kind="person")                 # Squidbrake's own change: noted, not an alert
+    assert server.check_integrity() == []
+    (data / "keys.json").write_text('{"keys": {"me": {"sha256": "x", "approver": true}}}')   # edited by hand
+    changes = server.check_integrity()
+    assert {"kind": "keys", "what": "keys.json", "change": "changed"} in changes
+    log = server.verify_audit_chain()                              # the alert is on the record too
+    with server.engine.connect() as conn:
+        assert conn.execute(server.select(server.audit_trail.c.action).where(
+            server.audit_trail.c.action == "integrity.changed")).first()
+    server.accept_integrity("tester")

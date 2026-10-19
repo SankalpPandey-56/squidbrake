@@ -17,6 +17,33 @@ named next to it is in `tests/`.
 - **The gateway's machine and its data folder** (`~/.squidbrake/data`: keys, link secret, ledger key, database)
   aren't writable by anything the agent runs, except through the agent's own tools, which go through the hook.
 
+## When the agent and Squidbrake run as the same user
+
+On a laptop, the agent and Squidbrake usually run as the same OS user. Then the agent's process has the same file
+permissions as Squidbrake's, and **no check on what a command says can fully close that**. A program the agent was
+allowed to run can read any file that user can read.
+
+What Squidbrake does about it:
+
+- **Keys are found by their real path.** Before a call is judged, `cd`, variables, `~`, globs and symlinks are
+  followed. A call that reaches Squidbrake's data folder or home folder by any of them is blocked. A call that reads
+  or copies a whole folder that holds the keys (`find ~`, `cp -r`, `tar`, a search across the home folder) waits for
+  a person. **(test)** `test_protected_paths.py`
+- **Tamper detection.** Every 15 seconds Squidbrake checks `keys.json`, `secret.key` and `ledger.key`. Its own
+  changes are noted as they happen (a key added in Team or with `add-key`). Any other change is an immediate alert,
+  an `integrity.changed` entry in the audit trail and, with `integrity: fail_closed`, a stop on risky actions.
+  **(test)** `test_threat_model.py`
+- **Approvals come from another channel.** A person approves in the dashboard, on a phone or in Slack. The agent's
+  key can't approve, and the agent can't reach the approval API.
+- **Owner-only files.** On macOS and Linux the data folder is 700 and the key files are 600. That stops other users
+  on the machine, but not the same user.
+
+**What closes it fully: run Squidbrake as a different user, or on another machine.** With a team gateway on a
+server (`install.sh`, Docker), the agent's computer holds only its own agent key. That key can ask, but it can
+never approve. The approvers' keys, the link secret and the record live where the agent's user has no access at
+all. For a single laptop, running the gateway under a separate OS user gives the same separation. Without that,
+treat the same-user protections above as making tampering visible and slow, not impossible.
+
 ## What it stops
 
 - **An agent approving its own action.** These are blocked in code, before the rules and in observe mode too
@@ -109,8 +136,9 @@ These are known and not fixed. Some can't be fixed at this layer.
      backups-off-then-delete rule.
    - Chains only remember what their rules name. A first step that no rule names is in the record, but it
      isn't a capability.
-8. **Someone with admin rights on the machine.** They can edit the data folder, the package or the agents' configs
-   directly. Integrity checks alert on the hooks, rules and package, not on the data folder itself. Lockdown and
+8. **Someone with admin rights on the machine, or the agent's own user outside its tools.** They can edit the data
+   folder, the package or the agents' configs directly. Integrity checks alert on the hooks, rules, package and key
+   files within seconds, but they can't prevent the change. See *When the agent and Squidbrake run as the same user*. Lockdown and
    `audit verify` (an exported, signed log) are the answers for a company.
 9. **A person approving something they shouldn't.** Squidbrake makes sure a person sees the action, with the reason
    and what led to it. It doesn't make the decision for them.
