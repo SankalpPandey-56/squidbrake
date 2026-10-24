@@ -531,6 +531,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
     <label class="toggle"><input type="checkbox" id="auto" checked> Live</label>
     <button class="btn" id="refresh" title="Refresh">↻</button>
     <button class="btn" id="phoneBtn" title="Approve from your phone">📱 Phone</button>
+    <button class="btn" id="notifyBtn" aria-pressed="false">🔔 <span id="notifyText">Alerts off</span></button>
     <button class="btn" id="keyBtn" title="Sign in with a different key">⚿ <span id="meName">Key</span></button>
     <button class="btn danger" id="stopBtn" title="Block every agent action right now" hidden>⏹ Stop agents</button>
   </header>
@@ -911,7 +912,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
       Anyone who scans this can act as you, so don't share it.</p>
     <p class="warn" id="phoneWarn" hidden>No public address is set, so this only works on the same Wi-Fi/PC. An admin can set it in Settings.</p>
     <div class="qr"><img id="phoneQr" alt="QR code for your phone approvals page"></div>
-    <p class="hint">For instant pop-ups, also turn on phone notifications in Settings.</p>
+    <p class="hint">For instant pop-ups, also turn on phone notifications in Settings. On this computer, 🔔 Alerts gives you a desktop pop-up.</p>
     <div class="acts"><button class="btn primary" value="close">Done</button></div>
   </form>
 </dialog>
@@ -1912,6 +1913,7 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
     const data = await api("/v1/events", { status: "awaiting_approval", limit: 200 });
     queue = data.events.sort((a, b) => (a.approval_deadline || "").localeCompare(b.approval_deadline || ""));
     renderQueue();
+    notifyQueue();
     // Someone else (or the timeout) decided the event that's open in the drawer.
     if (drawerEvent && drawerEvent.status === "awaiting_approval" && !queue.some((q) => q.id === drawerEvent.id)) refreshDrawer();
   }
@@ -1974,6 +1976,70 @@ dialog input#stopReason { width: 100%; border: 1px solid var(--border); backgrou
     }
     tickClocks();
     updateShortcutSelection();
+  }
+
+  // ---------- desktop alerts: a pop-up when a new request joins the queue, so nobody has to keep this tab in view.
+  // The queue is polled every 5s even in a background tab (see the wiring below), which is what feeds this.
+  const deskPref = {
+    get() { try { return localStorage.getItem("gw.notify") === "1"; } catch { return false; } },
+    set(v) { try { localStorage.setItem("gw.notify", v ? "1" : "0"); } catch {} },
+  };
+  let notifySeen = null, notifySeenFor = null;   // ids already shown to this viewer; null until the first load, which never pops up
+  let notifyOpen = [];   // [{n, ids}]: closed once none of its requests is still waiting
+  function deskState() {
+    if (!("Notification" in window)) return "unsupported";
+    if (!window.isSecureContext) return "insecure";
+    if (Notification.permission === "denied") return "blocked";
+    return Notification.permission === "granted" && deskPref.get() ? "on" : "off";
+  }
+  const DESK_TITLES = {
+    on: "You get a desktop pop-up when an action needs approval. Click to turn it off.",
+    off: "Get a desktop pop-up when an action needs approval, even while you work in another app",
+    blocked: "This browser blocks notifications from this page. Allow them in the site settings (left of the address bar), then click again.",
+    insecure: "Browsers only show notifications on https or localhost. Open the dashboard at http://localhost:<port> or your https address.",
+    unsupported: "This browser can't show desktop notifications. Phone notifications in Settings still work.",
+  };
+  function renderNotifyBtn() {
+    const s = deskState(), b = $("#notifyBtn");
+    b.setAttribute("aria-pressed", String(s === "on"));
+    b.title = DESK_TITLES[s];
+    $("#notifyText").textContent = s === "on" ? "Alerts on" : "Alerts off";
+  }
+  $("#notifyBtn").addEventListener("click", async () => {
+    const s = deskState();
+    if (s === "on") { deskPref.set(false); renderNotifyBtn(); toast("Desktop alerts off."); return; }
+    if (s !== "off") { renderNotifyBtn(); toast(DESK_TITLES[s], 8000); return; }
+    const p = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+    deskPref.set(p === "granted");
+    renderNotifyBtn();
+    toast(p === "granted" ? "Desktop alerts on. Keep this tab open; it can stay in the background." : DESK_TITLES[deskState()], 8000);
+  });
+  renderNotifyBtn();
+  function notifyQueue() {
+    const viewer = me ? me.client : "", waiting = new Set(queueIds);
+    notifyOpen = notifyOpen.filter((o) => o.ids.some((id) => waiting.has(id)) || (o.n.close(), false));   // decided elsewhere: take it down
+    if (notifySeen === null || notifySeenFor !== viewer) { notifySeen = waiting; notifySeenFor = viewer; return; }   // first look: no pop-up for what was already there
+    const fresh = queue.filter((q) => !notifySeen.has(q.id));
+    notifySeen = waiting;
+    if (!fresh.length || !(me && me.can_approve)) return;
+    if (document.visibilityState === "visible" && document.hasFocus()) return;   // they're looking at the page already
+    if (deskState() !== "on") { renderNotifyBtn(); return; }   // permission may have been revoked since
+    const one = fresh.length === 1 ? fresh[0] : null;
+    let n;
+    try {
+      n = new Notification(one ? `Needs approval: ${one.name}` : `${fresh.length} actions need approval`, {
+        body: one ? [agentOf(one), one.reason].filter(Boolean).join(" · ") : fresh.slice(0, 5).map((q) => `${q.name} (${agentOf(q)})`).join("\n"),
+        tag: one ? `sb-${one.id}` : "sb-batch",
+        requireInteraction: true,   // stays up until you act on it, or until it's decided somewhere else
+      });
+    } catch { return; }   // Android Chrome only allows notifications from a service worker
+    n.onclick = () => {
+      window.focus(); n.close();
+      showView("activity");
+      if (one && queueRow(one.id)) { setQueueSelection(one.id); queueRow(one.id).scrollIntoView({ block: "nearest" }); }
+      else $("#approvals").scrollIntoView({ block: "start" });
+    };
+    notifyOpen.push({ n, ids: fresh.map((q) => q.id) });
   }
 
   // ---------- drawer

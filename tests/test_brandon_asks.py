@@ -158,3 +158,12 @@ def test_the_terminal_guard_goes_in_and_out_of_the_startup_file(tmp_path):
     assert list(tmp_path.glob(".bashrc.bak-*"))                          # the old one kept
     assert "Took" in shell_guard.remove("bash", rc)
     assert rc.read_text() == "export A=1\n"
+
+
+# ---- a desktop pop-up when something needs approval
+
+def test_the_dashboard_pops_up_new_approvals_on_the_desktop():
+    page = (ROOT / "dashboard.html").read_text(encoding="utf-8")
+    assert 'id="notifyBtn"' in page and "Notification.requestPermission()" in page
+    assert "notifyQueue();" in page                     # runs on every queue load, which keeps polling in a background tab
+    assert "requireInteraction: true" in page and "o.n.close()" in page   # stays up until decided, then goes away
