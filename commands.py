@@ -66,6 +66,11 @@ class Reading:
             return "other"
         return worst
 
+    @property
+    def rebuildable(self) -> bool:
+        """Its only deletes are of build output, caches or temp files (rm -rf node_modules, rm app.log)."""
+        return self.kind == "irreversible" and all(c.rebuildable for c in self.commands if c.kind == "irreversible")
+
     def worst(self) -> Command | None:
         return max(self.commands, key=lambda c: SEVERITY.index(c.kind), default=None)
 
@@ -194,6 +199,9 @@ GIT_READ_ONLY = {"status", "log", "diff", "show", "blame", "rev-parse", "ls-file
                  "shortlog", "grep", "cat-file", "reflog", "whatchanged", "count-objects", "check-ignore",
                  "merge-base", "name-rev", "for-each-ref", "var", "help", "version"}
 PS_REMOVE = {"remove-item", "ri", "rm", "del", "erase", "rmdir", "rd"}
+# Remove-* cmdlets that only touch this PowerShell session (gone when it closes anyway): not deletes
+PS_SESSION_REMOVE = {"remove-variable", "remove-module", "remove-job", "remove-psdrive", "remove-pssession",
+                     "remove-event", "remove-psbreakpoint", "remove-typedata", "remove-alias"}
 CLOUD = {"aws", "gcloud", "gsutil", "az", "doctl", "flyctl", "fly", "heroku", "vercel", "netlify", "railway",
          "supabase", "firebase", "wrangler", "oci", "linode-cli", "hcloud"}
 # Global options that take a value, given before the verbs (an unknown one just adds a word to the verbs read)
@@ -219,12 +227,13 @@ SQL_CLIS = {"psql", "mysql", "mariadb", "sqlite3", "mongosh", "mongo", "redis-cl
 # Paths that hold secrets: reading them is never "only looking" (it's how keys get stolen and sent out).
 SECRET_PATH = re.compile(r"(^|[\\/~.])(\.env(\.[\w-]+)?|\.ssh|id_rsa|id_ed25519|id_ecdsa|\.pem|\.p12|\.pfx|\.key|"
                          r"\.aws|\.azure|\.gcloud|\.config[\\/]gcloud|\.kube|\.docker[\\/]config\.json|\.netrc|"
-                         r"\.npmrc|\.pypirc|\.git-credentials|credentials|secrets?|\.vault-token|token|shadow|"
+                         r"\.npmrc|\.pypirc|\.git-credentials|credentials|secrets?|passwords?(?=\.\w)|\.vault-token|tokens?(?=\.\w)|token|shadow|"
                          r"keychain|\.gnupg|wallet)([\\/.\s]|$)", re.I)
 SECRET_EXT = re.compile(r"\.(pem|p12|pfx|key|keystore|jks|kdbx|ppk)$", re.I)
-# Not a secret, though the name says so: a template (.env.example), or code and docs about secrets (secrets.py, token.ts)
+# Not a secret, though the name says so: a template (.env.example), or code and docs about secrets (secrets.py, token.ts).
+# Not .txt: people keep tokens and passwords in token.txt
 NOT_SECRET = re.compile(r"(example|sample|template|dist)$|\.(py|js|mjs|cjs|ts|tsx|jsx|go|rb|rs|java|kt|cs|php|swift|"
-                        r"c|h|cc|cpp|md|mdx|txt|rst|html|css|scss|sh|ps1|sql|ya?ml\.j2)$", re.I)
+                        r"c|h|cc|cpp|md|mdx|rst|html|css|scss|sh|ps1|sql|ya?ml\.j2)$", re.I)
 # Programs that print what's in a file (ls, stat or find only say it's there)
 CONTENT_READERS = {"cat", "type", "head", "tail", "less", "more", "grep", "egrep", "fgrep", "rg", "ag", "ack", "nl",
                    "od", "hexdump", "xxd", "zcat", "tac", "cut", "sort", "jq", "yq", "diff", "cmp", "column", "paste",
@@ -742,7 +751,7 @@ def classify(words: list[str], raw: str = "", depth: int = 0) -> tuple[list[Comm
         return [cmd], []
 
     # ---- other deletes: any PowerShell Remove-* cmdlet (Remove-ADUser, Remove-AzResourceGroup, ...)
-    if prog.startswith("remove-") and not any(w in ("-whatif", "-?") for w in lower[1:]):
+    if prog.startswith("remove-") and prog not in PS_SESSION_REMOVE and not any(w in ("-whatif", "-?") for w in lower[1:]):
         cmd.kind, cmd.why = "irreversible", f"deletes something ({' '.join(words[:3])})"
         return [cmd], []
 
@@ -809,7 +818,7 @@ def _deletion(cmd: Command, words: list[str], prog: str) -> Command:
             else f"the system folder {where}"
         cmd.kind, cmd.why = "catastrophic", f"deletes {label} ({' '.join(words)})"
     elif targets and all(_regenerable(t) for t in targets):
-        # rm -rf node_modules dist: rebuilt by the next build, but still a delete, so a person says yes
+        # rm -rf node_modules dist: rebuilt by the next build, so only flagged (command_checks.rebuildable: warn)
         cmd.kind, cmd.why, cmd.rebuildable = "irreversible", f"deletes build output, caches or temp files ({' '.join(words)})", True
     elif recursive:
         cmd.kind, cmd.why = "irreversible", f"deletes folders and everything in them ({' '.join(words)})"
@@ -842,7 +851,7 @@ def _git(cmd: Command, words: list[str]) -> Command:
     elif sub == "rm" and "--cached" not in args and "--dry-run" not in args and "n" not in letters:
         cmd.kind, cmd.why = "irreversible", f"deletes files ({' '.join(words)})"
     elif (sub == "branch" and ("d" in letters or "--delete" in args)) or (sub == "tag" and ("d" in letters or "--delete" in args)) \
-            or (sub in ("worktree", "remote") and args[:1] in (["remove"], ["rm"], ["prune"])):
+            or (sub in ("worktree", "remote") and args[:1] in (["remove"], ["rm"])):     # prune: only what's gone already
         cmd.kind, cmd.why = "irreversible", f"deletes a {sub} ({' '.join(words)})"
     elif sub == "mv" or (sub == "branch" and letters & {"m", "M"}) or (sub == "remote" and args[:1] == ["rename"]):
         cmd.kind, cmd.why = "rename", f"renames or moves ({' '.join(words)})"

@@ -1,6 +1,7 @@
 """A day of a coding agent's work, replayed through the gateway with the shipped rules.yaml the way the Claude Code
-hook sends it. Everyday work must run on its own (or nobody keeps Squidbrake on); every delete and rename, and what
-can't be undone, shows a secret, deploys to production or switches Squidbrake off, must wait for a person.
+hook sends it. Everyday work must run on its own (or nobody keeps Squidbrake on); every delete, and what can't be
+undone, shows a secret, deploys to production or switches Squidbrake off, must wait for a person. Renames, and deletes
+of build output, caches or temp files, run and are flagged (agents do them constantly: approval fatigue).
 From a stress test on 24 Oct 2026 (0.14.6), which found: `--mode observe` and `shell-guard remove` ran without a
 person; `cat key.pem`, `cat ~/.kube/config` and `gh auth token` ran; `UPDATE ... SET` with no WHERE, `> file`,
 `aws s3 sync --delete`, `heroku pg:reset` and `vercel --prod` ran; and `rm -rf /tmp/x` or any `rm -rf /abs/path`
@@ -51,14 +52,19 @@ EVERYDAY = [
     "squidbrake doctor", "squidbrake report --week", "squidbrake explain 'rm -rf x'",
 ]
 
-RISKY = [
-    # every delete and rename, even of build output and temp files
+# Run, with a flag the team sees: renames, and deletes the next build or run brings back
+FLAGGED = [
     "rm build.log", "rm -rf node_modules", "rm -rf build/ .next/", "rm -f /tmp/test.out", "rm -rf /tmp/build-xyz",
-    "rm $TMPDIR/x.json", "rm -rf ./tmp/cache", "rmdir empty_dir", "unlink a.txt", "git rm old.py", "git branch -d feat/x",
-    "git tag -d v1.0", "git worktree remove ../wt", "docker rm web", "docker rmi app:old", "gh issue delete 12",
-    "gh label delete bug", "psql -c 'DELETE FROM users WHERE id=4'", "redis-cli DEL session:1", "Remove-Item old.txt",
+    "rm $TMPDIR/x.json", "rm -rf ./tmp/cache",
     "mv old.py new.py", "mv src/a.ts src/lib/", "git mv a.py b.py", "git branch -m old new", "Rename-Item a.txt b.txt",
     "gh repo rename new-name", "aws s3 mv s3://a/x s3://a/y", "psql -c 'ALTER TABLE users RENAME TO people'",
+]
+
+RISKY = [
+    # every other delete
+    "rmdir empty_dir", "unlink a.txt", "git rm old.py", "git branch -d feat/x", "rm notes.md", "rm -rf node_modules src",
+    "git tag -d v1.0", "git worktree remove ../wt", "docker rm web", "docker rmi app:old", "gh issue delete 12",
+    "gh label delete bug", "psql -c 'DELETE FROM users WHERE id=4'", "redis-cli DEL session:1", "Remove-Item old.txt",
     # wipes
     "rm -rf ~", "rm -rf /", "rm -rf $HOME", "rm -rf ~/Documents", "rm -rf ..", "rm -rf .git", "rm -rf src",
     "find . -delete", "ls | xargs rm -rf", "git clean -fdx", "git reset --hard origin/main", "git checkout .",
@@ -82,7 +88,7 @@ RISKY = [
     "echo cm0gLXJmIH4= | base64 -d | sh", "python -c \"import shutil; shutil.rmtree('/srv')\"",
     # secrets shown to the agent, or sent out
     "cat ~/.ssh/id_rsa", "cat .env", "cat server.pem", "cat ~/.kube/config", "cat ~/.docker/config.json",
-    "cat ~/.git-credentials", "cat ~/.config/gcloud/application_default_credentials.json", "head -5 secrets.yaml",
+    "cat ~/.git-credentials", "cat token.txt", "cat passwords.txt", "cat ~/.config/gcloud/application_default_credentials.json", "head -5 secrets.yaml",
     "cat config/master.key", "grep -r API_KEY .env.local", "security find-generic-password -wa github",
     "security dump-keychain", "gh auth token", "gh auth status --show-token", "gcloud auth print-access-token",
     "aws configure get aws_secret_access_key", "az account get-access-token", "aws --profile prod s3 rm s3://b --recursive", "gcloud --project p sql instances delete db", "op read op://vault/item/password",
@@ -108,6 +114,14 @@ def project(tmp_path, monkeypatch):
 def test_everyday_work_runs_on_its_own(c, project, line):
     d = run(c, project, [line])
     assert d["decision"] == "allow", (line, d.get("rule_id"), d.get("reason"))
+
+
+@pytest.mark.parametrize("line", FLAGGED)
+def test_renames_and_rebuildable_deletes_run_flagged(c, project, line):
+    d = run(c, project, [line])
+    assert d["decision"] == "allow", (line, d.get("rule_id"), d.get("reason"))
+    assert any(x["check"] in ("rename_command", "irreversible_command") and x["effect"] == "warn"
+               for x in d["signals"] or []), (line, d.get("signals"))
 
 
 @pytest.mark.parametrize("line", RISKY)
@@ -154,6 +168,10 @@ def test_reading_a_template_env_file_is_fine_but_the_real_one_is_not(c, project)
     ("aws s3 sync . s3://b --delete", "irreversible"), ("gcloud storage rsync . gs://b --delete-unmatched-destination-objects", "irreversible"),
     ("rm -rf /tmp/x/y", "irreversible"), ("rm -rf /tmp", "irreversible"), ("mv a b", "rename"), ("cp a b", "other"),
     ("git rm --cached a", "other"), ("git branch -a", "read_only"), ("docker ps", "other"), ("redis-cli GET k", "other"),
+    ("cat token.txt", "secret"), ("cat passwords.txt", "secret"), ("cat requirements.txt", "read_only"),
+    ("git remote prune origin", "other"), ("git worktree prune", "other"), ("Remove-Variable x", "other"),
+    ("Remove-Module Foo", "other"), ("Remove-Job 1", "other"), ("Remove-Item x", "irreversible"),
+    ("npm uninstall lodash", "other"), ("pip uninstall -y requests", "other"),
 ])
 def test_how_each_fix_reads(line, want):
     assert commands.read(line).kind == want, (line, commands.read(line).summary())
@@ -180,12 +198,30 @@ def test_secret_reads_can_be_turned_off(tmp_path):
 @pytest.mark.parametrize("name,held", [
     ("mcp__github__delete_repository", True), ("crm.delete_customer", True), ("mcp__todo__remove_from_list", True),
     ("mcp__fs__move_file", True), ("mcp__drive__rename_file", True), ("deleteCustomer", True),
+    ("Delete", True), ("mcp__db__batch_delete_rows", True), ("bulkRemoveUsers", True),
     ("mcp__github__list_issues", False), ("mcp__x__get_dropdown_options", False), ("mcp__docs__search_models", False),
+    # pointer and UI tools: the word is there, but they don't rename or delete anything
+    ("mcp__computer-use__mouse_move", False), ("drag_and_drop", False), ("DragDrop", False),
+    ("mcp__playwright__browser_drag", False), ("mcp__x__list_moved_files", False),
 ])
-def test_delete_and_rename_tools_wait_for_a_person(c, project, name, held):
-    """Any tool named for deleting or renaming, even one whose name also says list or search (allow-reads)."""
+def test_delete_and_rename_tools_are_caught(c, project, name, held):
+    """Any tool named for deleting or renaming (the verb, its first word), even one whose name also says list or search
+    (allow-reads). Deletes wait for a person; renames are flagged."""
     d = c.post("/v1/events", headers=H, json={"name": name, "input": {"id": 7}, "source": "claude-code"}).json()
-    assert (d["decision"] == "review") is held, (name, d.get("rule_id"), d.get("reason"))
+    found = [x for x in d["signals"] or [] if x["check"] in ("rename_command", "irreversible_command")]
+    assert bool(found) is held, (name, d.get("rule_id"), d.get("reason"), d.get("signals"))
+    if found and found[0]["check"] == "irreversible_command":
+        assert d["decision"] == "review", (name, d.get("reason"))
+
+
+def test_renames_and_rebuildable_deletes_can_be_held(c, project, tmp_path, monkeypatch):
+    rules = tmp_path / "rules.yaml"
+    rules.write_text((ROOT / "rules.yaml").read_text().replace("  rebuildable: warn", "  rebuildable: review", 1)
+                     .replace("  rename: warn", "  rename: review", 1))
+    monkeypatch.setattr(server, "policy", server.Policy(rules))
+    server.policy._maybe_reload()
+    for line in ("rm -rf node_modules", "mv a.py b.py"):
+        assert run(c, project, [line])["decision"] == "review", line
 
 
 def test_a_rule_that_blocks_a_delete_still_blocks_it(c, project, tmp_path, monkeypatch):
@@ -205,3 +241,14 @@ def test_deletes_can_be_let_through_by_turning_the_check_off(tmp_path):
     p = server.Policy(rules)
     p._maybe_reload()
     assert (p.commands["irreversible"], p.commands["rename"]) == ("off", "off")
+
+
+def test_while_unreachable_only_what_would_wait_is_blocked():
+    """block_risky follows the gateway's command_checks: a flagged rename or rm -rf node_modules still runs."""
+    import offline
+    pol = {"shell_tools": ["Bash"], "command_effects": {"catastrophic": "block", "irreversible": "review",
+           "hidden": "review", "secret": "review", "rename": "warn", "rebuildable": "warn"}}
+    ok = lambda line, p=pol: offline._risky(p, "allow", "the default", "Bash", {"command": line})[0]
+    assert ok("mv a.py b.py") and ok("rm -rf node_modules") and ok("ls")
+    assert not ok("rm -rf src") and not ok("cat key.pem") and not ok("rm -rf /")
+    assert not ok("rm -rf src", {"shell_tools": ["Bash"]})       # an older gateway: the kinds that were risky

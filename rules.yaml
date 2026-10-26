@@ -110,10 +110,13 @@ history_checks:
 command_checks:
   tools: ["Bash", "PowerShell", "*shell*", "*run_command*", "*execute_command*", "*terminal*", "*exec_command*"]
   catastrophic: block     # rm -rf /, rm -rf ~, wiping a drive (rmdir /s d:\), mkfs, dd onto a disk, chmod -R 777 /
-  irreversible: review    # every delete (rm, even rm -rf node_modules; git rm, docker rm, DELETE FROM), git push --force, git reset --hard, terraform destroy, kubectl delete, cloud deletes, DROP TABLE
+  irreversible: review    # every delete (rm, git rm, docker rm, DELETE FROM), git push --force, git reset --hard, terraform destroy, kubectl delete, cloud deletes, DROP TABLE
+  rebuildable: warn       # deletes of build output, caches or temp files only (rm -rf node_modules dist, rm app.log,
+                          # rm -rf /tmp/x): flagged for you to see; review holds them like other deletes
   hidden: review          # code that can't be read first: eval, curl ... | sh, base64 -d | bash, powershell -EncodedCommand,
                           # programs written inline (python -c, node -e, perl -e), a program named only when it runs
-  rename: review          # renames or moves: mv, git mv, Rename-Item, git branch -m, aws s3 mv, ALTER TABLE ... RENAME
+  rename: warn            # renames or moves: mv, git mv, Rename-Item, git branch -m, aws s3 mv, ALTER TABLE ... RENAME:
+                          # flagged for you to see; review holds them
   secret: review          # shows a secret to the agent (and its transcript): cat key.pem, cat ~/.kube/config,
                           # gh auth token, a keychain password, kubectl get secret -o yaml
   written_then_run: review  # a script the agent created in this conversation, then runs (python x.py): read it first

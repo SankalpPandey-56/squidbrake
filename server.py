@@ -912,9 +912,10 @@ COMMAND_DEFAULTS = {
     "tools": ["Bash", "PowerShell", "*shell*", "*run_command*", "*execute_command*", "*terminal*", "*exec_command*"],
     "catastrophic": "block",   # wipes a disk, the filesystem or a home folder: rm -rf /, rm -rf ~, mkfs, dd onto a disk
     "irreversible": "review",  # every delete (rm, git rm, docker rm, DELETE FROM), git push --force, git reset --hard, terraform destroy, kubectl delete, DROP TABLE
+    "rebuildable": "warn",     # a delete of build output, caches or temp files only (rm -rf node_modules, rm app.log): flagged
     "hidden": "review",        # code that can't be read first: eval, curl | sh, base64 -d | bash, -EncodedCommand,
                                # inline programs (python -c, node -e, ...), a program named only when it runs
-    "rename": "review",        # renames or moves: mv, git mv, Rename-Item, git branch -m, aws s3 mv
+    "rename": "warn",          # renames or moves: mv, git mv, Rename-Item, git branch -m, aws s3 mv: flagged; review holds them
     "secret": "review",        # shows a secret to the agent: cat key.pem / ~/.kube/config, gh auth token, keychain
     "written_then_run": "review",  # runs a script the agent itself created in this conversation (read it first)
     "edited_then_run": "warn",     # runs a script the agent changed in this conversation: flagged; review holds it
@@ -1155,7 +1156,7 @@ class Policy:
                         raise ValueError(f"history_checks.{k} must be block, review, warn or off")
                 hc["company_domains"] = [d.lower().strip() for d in hc["company_domains"] or []]
                 cc = {**COMMAND_DEFAULTS, **(data.get("command_checks") or {})}
-                for k in (*COMMAND_EFFECT_KEYS, "written_then_run", "edited_then_run", "unknown"):
+                for k in (*COMMAND_EFFECT_KEYS, "rebuildable", "written_then_run", "edited_then_run", "unknown"):
                     cc[k] = "off" if cc[k] is False else COMMAND_DEFAULTS[k] if cc[k] is True else str(cc[k]).lower()
                     if cc[k] not in ("block", "review", "warn", "off"):
                         raise ValueError(f"command_checks.{k} must be block, review, warn or off")
@@ -1688,17 +1689,24 @@ def run_rule_signals(ev: "EventIn", client: str) -> list[dict]:
 
 DELETE_WORDS = {"delete", "del", "remove", "rm", "destroy", "purge", "wipe", "erase", "trash", "unlink", "drop", "truncate"}
 RENAME_WORDS = {"rename", "move", "mv"}
+# Words that can come before the verb without changing it (batch_delete_rows, bulkRemove, force_delete)
+VERB_PREFIXES = {"batch", "bulk", "mass", "multi", "force", "hard", "soft", "permanently", "permanent"}
 
 
 def tool_name_signals(name: str) -> list[dict]:
     """A tool that isn't a shell, named for deleting or renaming (Cursor's Delete, crm.delete_customer, mcp__x__rename_file,
     remove_from_list): held like the same thing done in a shell, even when the name also says list, get or search.
-    A signal only makes a decision stricter, so a rule that blocks it still blocks it; a rule that allows that tool by
-    name (not allow-reads) lets it run (see the caller)."""
+    Only the verb counts, the tool's first word after its server (mcp__x__, crm.): mouse_move and drag_and_drop don't
+    rename or delete anything. A signal only makes a decision stricter, so a rule that blocks it still blocks it; a rule
+    that allows that tool by name (not allow-reads) lets it run (see the caller)."""
     cc = policy.commands
-    words = {w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", name or "")}
-    for kind, found, does in (("irreversible", words & DELETE_WORDS, "deletes or removes something"),
-                              ("rename", words & RENAME_WORDS, "renames or moves something")):
+    tool = re.split(r"__|[.:/]", name or "")[-1]
+    words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", tool)]
+    while len(words) > 1 and words[0] in VERB_PREFIXES:
+        words = words[1:]
+    verb = words[0] if words else ""
+    for kind, found, does in (("irreversible", verb in DELETE_WORDS, "deletes or removes something"),
+                              ("rename", verb in RENAME_WORDS, "renames or moves something")):
         if found and cc[kind] != "off":
             return [{"check": f"{kind}_command", "effect": cc[kind], "message": f"This tool {does} ({name})."}]
     return []
@@ -1714,16 +1722,19 @@ def command_signals(name: str, input: Any, metadata: dict | None = None) -> tupl
     if not line:
         return [], False
     reading = commands.read(line)
-    kind, message = reading.kind, f"This command {reading.summary()}."
+    kind, message, effect = reading.kind, f"This command {reading.summary()}.", None
+    if reading.rebuildable:
+        effect = cc["rebuildable"]          # rm -rf node_modules: the next build brings it back
     for via, inner in reported_runs(metadata):
         r = commands.read(inner)
         if r.kind in COMMAND_EFFECT_KEYS and commands.SEVERITY.index(r.kind) > commands.SEVERITY.index(kind):
-            kind = r.kind
+            kind, effect = r.kind, None
             message = f"This command runs {via}, which {r.summary()}."
     if kind in COMMAND_EFFECT_KEYS:
-        if cc[kind] == "off":
+        effect = effect or cc[kind]
+        if effect == "off":
             return [], False
-        return [{"check": f"{kind}_command", "effect": cc[kind], "message": message}], False
+        return [{"check": f"{kind}_command", "effect": effect, "message": message}], False
     if reading.unknown and cc["unknown"] != "off":
         return [{"check": "unknown_command", "effect": cc["unknown"],
                  "message": f"This command runs a program Squidbrake doesn't know ({', '.join(reading.unknown[:3])}), so "
@@ -3961,6 +3972,7 @@ def policy_offline(who: str = Depends(auth)):
     policy._maybe_reload()
     return {"client": who, "default": policy.when_unreachable, "fingerprint": policy.fingerprint,
             "default_action": policy.default, "shell_tools": policy.commands["tools"],
+            "command_effects": {k: policy.commands[k] for k in (*COMMAND_EFFECT_KEYS, "rebuildable")},
             "rules": [{"id": r["id"], "match": r["match_spec"], "action": r["action"],
                        "when_unreachable": r["when_unreachable"] or policy.when_unreachable} for r in policy.rules]}
 
@@ -5438,9 +5450,10 @@ def _cli_explain(args) -> int:
     print(reading.kind + (f": {reading.summary()}" if reading.summary() else ""))
     for c in reading.commands:
         print("  " + c.raw.ljust(14) + " " + c.kind)
-    effect = policy.commands.get(reading.kind)
+    key = "rebuildable" if reading.rebuildable else reading.kind
+    effect = policy.commands.get(key)
     if effect:
-        print(f"  rule: command_checks.{reading.kind} = {effect}")
+        print(f"  rule: command_checks.{key} = {effect}")
     # What the gateway would do with it as a Bash call: the rules (first match wins), then the command checks on top,
     # the way record_event combines them (without history: no earlier steps here)
     inp = {"command": args.command}
