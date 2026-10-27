@@ -577,8 +577,11 @@ def test_a_busy_install_becomes_a_lead_once_and_the_funnel_counts_it(insights, m
     assert len(told) == 1 and "Kai" in told[0] and "LeadCo" in told[0]
     card = next(x for x in insights.get("/v1/admin/contacts", headers=admin).json()["contacts"] if x["name"] == "LeadCo")
     assert card["lane"] == "Product leads" and card["pilot_code"] == code and card["signal"] == "using"
-    steps = {x["step"]: x["n"] for x in insights.get("/v1/admin/funnel", headers=admin).json()["steps"]}
-    assert steps["Signed up"] >= 1 and steps["Became a lead"] >= 1 and steps["Active this week"] >= 1
+    f = insights.get("/v1/admin/funnel", headers=admin).json()
+    steps = {x["step"]: x["n"] for x in f["steps"]}
+    assert f["signups"] >= 1 and steps["Became a lead"] >= 1 and steps["Active this week"] >= 1
+    n = [x["n"] for x in f["steps"]]
+    assert n == sorted(n, reverse=True)                                     # a funnel only goes down
     assert insights.get("/v1/admin/funnel").status_code == 401
 
 

@@ -153,6 +153,10 @@ def test_installed_but_no_agent_connected_is_its_own_stage(insights):
     assert row["stage"] == "agent connected" and row["connected"] == ["cursor"]
     steps = [s["step"] for s in insights.get("/v1/admin/traction", headers=ADMIN).json()["funnel"]]
     assert steps.index("Set up (keys or install)") < steps.index("Agent connected") < steps.index("First action")
+    # set up without opening the link (a hosted pilot): it still counts as having opened it, so no step goes up
+    funnel = {s["step"]: s["count"] for s in insights.get("/v1/admin/traction", headers=ADMIN).json()["funnel"]}
+    n = [funnel[k] for k in ("Pilots created", "Opened the link", "Set up (keys or install)", "Agent connected", "First action")]
+    assert n == sorted(n, reverse=True)
 
 
 def test_an_old_version_is_tagged(insights, monkeypatch):

@@ -512,16 +512,19 @@ def funnel(days: int = 30):
                        if iid in joined}
         when = lambda t: datetime.fromisoformat(str(t).replace("Z", "+00:00")).replace(tzinfo=timezone.utc)
         quick = sum(1 for iid, t in first_catch.items() if when(t) - when(joined[iid][:19]) <= timedelta(days=1))
+        # every step below is about the installs that joined in these days, so each is a share of the one before
+        used = {iid for iid, counts in c.execute("SELECT install_id, counts FROM days") if iid in joined
+                and _int(json.loads(counts).get("events"))}
         active = {iid for iid, counts in c.execute("SELECT install_id, counts FROM days WHERE day >= ?", (week,))
-                  if _int(json.loads(counts).get("events"))}
+                  if iid in joined and _int(json.loads(counts).get("events"))}
         trials = c.execute("SELECT COUNT(*) FROM pilots WHERE plan='team' AND COALESCE(mrr, 0) = 0").fetchone()[0]
         paying, mrr = c.execute("SELECT COUNT(*), COALESCE(SUM(mrr), 0) FROM pilots WHERE mrr > 0").fetchone()
-        leads = c.execute("SELECT COUNT(*) FROM settings WHERE key LIKE 'lead:%' AND value >= ?", (since,)).fetchone()[0]
-    return {"days": days, "steps": [
-        {"step": "Signed up", "n": signups}, {"step": "Installed", "n": len(joined)},
-        {"step": "First catch within a day", "n": quick}, {"step": "Active this week", "n": len(active)},
-        {"step": "Became a lead", "n": leads}, {"step": "Invited a teammate", "n": invited},
-        {"step": "On a Team trial", "n": trials}, {"step": "Paying", "n": paying}], "mrr": mrr}
+        leads = {k[5:] for (k,) in c.execute("SELECT key FROM settings WHERE key LIKE 'lead:%'")} & active
+    # sign-ups are pilots, not installs, and Team trials and payers are teams: counted apart, not as funnel steps
+    return {"days": days, "signups": signups, "first_catch_within_a_day": quick, "invited": invited, "trials": trials,
+            "paying": paying, "steps": [
+        {"step": "Installed", "n": len(joined)}, {"step": "Used it", "n": len(used | active)},
+        {"step": "Active this week", "n": len(active)}, {"step": "Became a lead", "n": len(leads)}], "mrr": mrr}
 
 
 DAY_CAP = 100_000      # actions in one day from one install: far above real use, low enough not to swamp the totals
@@ -1084,13 +1087,17 @@ def traction():
     connected_codes = {i["code"] for i in installs if json.loads(i["connected"] or "[]") or (i["total_events"] or 0)} \
         | set(first_action)
     days_this_week = {p["code"]: sum(1 for d in events_by.get(p["code"], {}) if d in window(0)) for p in pilots}
-    funnel = [("Pilots created", len(pilots)),
-              ("Opened the link", sum(1 for p in pilots if p["page_views"])),
-              ("Set up (keys or install)", sum(1 for p in pilots if p["code"] in set_up)),
-              ("Agent connected", sum(1 for p in pilots if p["code"] in connected_codes)),
-              ("First action", len(first_action)),
-              ("Active 3+ days this week", sum(1 for v in days_this_week.values() if v >= 3)),
-              ("Paying", sum(1 for p in pilots if (p["mrr"] or 0) > 0))]
+    # each step counts the pilots that got at least that far, so it never goes up: a hosted pilot is set up without
+    # anyone opening the link, and it still opened it as far as the funnel is concerned
+    reached = [{p["code"] for p in pilots}, {p["code"] for p in pilots if p["page_views"]},
+               {p["code"] for p in pilots if p["code"] in set_up}, {p["code"] for p in pilots if p["code"] in connected_codes},
+               set(first_action) & listed]
+    for i in range(len(reached) - 2, 0, -1):
+        reached[i] |= reached[i + 1]
+    funnel = list(zip(("Pilots created", "Opened the link", "Set up (keys or install)", "Agent connected", "First action"),
+                      map(len, reached)))
+    funnel += [("Active 3+ days this week", sum(1 for c, v in days_this_week.items() if v >= 3 and c in reached[-1])),
+               ("Paying", sum(1 for p in pilots if (p["mrr"] or 0) > 0))]
     ttfa = [(datetime.fromisoformat(first_action[p["code"]]).date() - datetime.fromisoformat(p["created_at"]).date()).days
             for p in pilots if p["code"] in first_action]
     then4 = [p for p in pilots if active_in(p["code"], 4)]

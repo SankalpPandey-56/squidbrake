@@ -484,8 +484,9 @@ function plCard(x) {
 function funnelPanel(f) {
   if (!f) return "";
   const top = Math.max(1, ...f.steps.map((x) => x.n));
-  return `<section id="funnel"><div class="sec-h"><h2>Funnel</h2><span class="sub">Last ${f.days} days: from sign-up to paying.
-      ${money(f.mrr)} MRR now.</span></div>
+  return `<section id="funnel"><div class="sec-h"><h2>Funnel</h2><span class="sub">Installs that joined in the last ${f.days} days, each step a share of the one before.
+      ${f.first_catch_within_a_day ?? 0} caught something within a day. Also: ${f.signups ?? 0} sign-ups, ${f.invited ?? 0} invited a teammate,
+      ${f.trials ?? 0} on a Team trial, ${f.paying ?? 0} paying, ${money(f.mrr)} MRR now.</span></div>
     <div class="surface funnel">${f.steps.map((x, i) => {
       const prev = i ? f.steps[i - 1].n : 0, pct = i && prev ? Math.round((100 * x.n) / prev) : null;
       return `<div class="fn-row"><span class="fn-step">${esc(x.step)}</span>
@@ -899,7 +900,7 @@ function donut(parts) {                     // [[count, color], ...]
   }).join("");
   return `<svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--line-2)" stroke-width="16"/>${arcs}
     <text x="66" y="64" text-anchor="middle" style="font:500 28px var(--serif);fill:var(--ink)">${total}</text>
-    <text x="66" y="83" text-anchor="middle" style="font:500 11px var(--sans);fill:var(--muted)">decided</text></svg>`;
+    <text x="66" y="83" text-anchor="middle" style="font:500 11px var(--sans);fill:var(--muted)">holds</text></svg>`;
 }
 const deltaChip = (v) => v === null || v === undefined ? "" :
   `<span class="delta ${v > 0 ? "up" : v < 0 ? "down" : "flat"}">${v > 0 ? "▲" : v < 0 ? "▼" : "•"} ${Math.abs(v)}%</span>`;
@@ -919,7 +920,8 @@ function overview(d, inv, asks) {
   const all = range === "all" && d.pilots_total, W = all ? d.pilots_total : wk, when = all ? "since the start" : "this week";
   const allDaily = (d.pilots_daily || []).map((x) => x[1]), allDays = (d.pilots_daily || []).map((x) => x[0]);
   const stoppedN = all ? (W.rejected || 0) + (W.blocked || 0) : sc.stopped;
-  const decidedN = (W.approved || 0) + (W.rejected || 0) + (W.timed_out || 0);
+  // one definition everywhere (app.py scorecard and traction too): approved / what a person decided; timeouts apart
+  const decidedN = (W.approved || 0) + (W.rejected || 0);
   const approveRate = all ? (decidedN ? Math.round(100 * W.approved / decidedN) : null) : sc.approve_rate;
   const rangeBtns = `<div class="seg" role="group" aria-label="Show counts for">
     <button data-range="all" class="${all ? "on" : ""}" aria-pressed="${!!all}">All time</button>
@@ -946,7 +948,7 @@ function overview(d, inv, asks) {
     <div class="v">${v}</div>${n ? `<div class="n">${n}</div>` : ""}${extra}</div>`;
   const heldShare = W.events ? Math.round(1000 * W.held / W.events) / 10 : 0;
   const kpis = [
-    kpi("", "var(--ok)", "●", "Active pilots", `${active}<small>of ${pilots.length}</small>`, `${active3} active 3+ days ${deltaChip(inv ? inv.active_pilots_wow : null)}`,
+    kpi("", "var(--ok)", "●", "Active pilots", `${active}<small>of ${pilots.length}</small>`, [inv && inv.active_pilots_wow !== null ? `${deltaChip(inv.active_pilots_wow)} vs last week` : "", `${active3} active 3+ days`].filter(Boolean).join(" · "),
         spark(weeks.map((w) => w.active_pilots))),
     kpi("", "var(--c-approved)", "↯", "Agent actions", W.events.toLocaleString(), all ? "all time" : `this week ${deltaChip(inv ? inv.actions_wow : null)}`, spark(daily)),
     kpi("", "var(--warn)", "⏸", "Held for a person", W.held.toLocaleString(),
@@ -980,7 +982,8 @@ function overview(d, inv, asks) {
       ${catches.length > 1 ? `<div class="mini" style="margin-top:8px"><a href="#stopped">All ${catches.length} catches →</a></div>` : ""}`
     : `<div class="term"><div class="bar"><i></i><i></i><i></i><span>waiting for the first catch</span></div><pre><span class="dim">Nothing rejected or blocked yet. When a person says no, it shows up here.</span></pre></div>`;
 
-  const pctOf = (n) => decided ? Math.round(100 * n / decided) + "%" : "";
+  const byPerson = wk.approved + wk.rejected;
+  const pctOf = (n) => byPerson ? Math.round(100 * n / byPerson) + "%" : "";
   const maxA = Math.max(1, ...pilots.map((p) => p.week.events));
   const z = (n) => n ? n.toLocaleString() : `<span class="zero">0</span>`;
   const prow = (p) => {
@@ -1018,11 +1021,11 @@ function overview(d, inv, asks) {
     <div class="ov-row">
       <div class="ov-card"><h3>From pilot link to paying</h3><span class="sub">How many pilots reach each step. Between the columns: the share that made it to the next one (red under 60%).</span>
         ${funnel.length ? `<div class="pipe">${cols}</div><div class="pipe-l">${labels}</div>` : `<div class="sub">No pilots yet.</div>`}</div>
-      <div class="ov-card"><h3>What happened to the holds</h3><span class="sub">Every action paused for a person this week, by what they decided.</span>
+      <div class="ov-card"><h3>What happened to the holds</h3><span class="sub">Every action paused for a person this week. Approved and rejected: the share of what a person decided; timed out: nobody answered.</span>
         ${decided ? `<div class="holds">${donut([[wk.approved, "var(--c-approved)"], [wk.rejected, "var(--c-rejected)"], [wk.timed_out, "var(--c-timeout)"]])}
           <div class="lg"><div><i style="--c:var(--c-approved)"></i>Approved<b>${wk.approved}</b><small>${pctOf(wk.approved)}</small></div>
             <div><i style="--c:var(--c-rejected)"></i>Rejected<b>${wk.rejected}</b><small>${pctOf(wk.rejected)}</small></div>
-            <div><i style="--c:var(--c-timeout)"></i>Timed out<b>${wk.timed_out}</b><small>${pctOf(wk.timed_out)}</small></div></div></div>`
+            <div><i style="--c:var(--c-timeout)"></i>Timed out<b>${wk.timed_out}</b><small>no answer</small></div></div></div>`
           : `<div class="sub">No holds decided this week.</div>`}
         ${term}</div>
     </div>
