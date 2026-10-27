@@ -49,6 +49,12 @@ LASTING_ENV_RE = re.compile(
 # Squidbrake's own commands that loosen it: observe mode for everyone (nothing held), or the terminal guard taken out
 LOOSEN_RE = re.compile(r"(?i)\bsquidbrake(\.exe)?[\"']?\s+(connect|setup|start)\b[^|;&\n]*--mode[= ]+[\"']?(observe|shadow)\b|"
                        r"\bsquidbrake(\.exe)?[\"']?\s+shell-guard\s+(remove|uninstall)\b")
+# Getting the newest release from PyPI is routine (the release notes say to); a pin, a path, a URL or another index isn't
+PLAIN_UPGRADE_RE = re.compile(r"(?i)^\s*(python3?\s+-m\s+)?(pip3?|uv\s+pip)\s+install\s+(-U|--upgrade)(\s+(-q|--quiet|--user))*"
+                              r"\s+squidbrake(\[[\w,]+\])?\s*$|^\s*(pipx\s+upgrade|uv\s+tool\s+upgrade)\s+squidbrake\s*$")
+# Tools that only look: reading Squidbrake's installed code is how people learn it, not a way to change it
+READ_TOOLS = {"read", "grep", "glob", "ls", "notebookread", "view", "view_file", "read_file", "list_dir", "grep_search",
+              "find_by_name", "codebase_search", "file_search"}
 AUTH_OFF_RE = re.compile(r"(?i)\bGATEWAY_AUTH\s*=\s*[\"']?(off|disabled|false|0|no)\b")
 
 
@@ -160,6 +166,14 @@ def _paths_used(name: str, input, cwd: str) -> list[tuple[str, bool]]:
     return out
 
 
+def _only_looks(name: str, input) -> bool:
+    if (name or "").lower() in READ_TOOLS:
+        return True
+    import commands
+    cmd = commands.command_of(input)
+    return bool(cmd) and commands.read(cmd).kind == "read_only"
+
+
 def check(kind: str | None, name: str, input, metadata: dict | None, data_dir: Path) -> dict | None:
     """-> {"check": "approval" | "tamper", "effect": "block" | "review", "message"} or None."""
     if kind == "prompt":
@@ -194,7 +208,8 @@ def check(kind: str | None, name: str, input, metadata: dict | None, data_dir: P
     if BROWSER_STORE_RE.search(joined):
         return say("approval", "block", "This reads a browser's profile (cookies, saved keys and sign-ins, including "
                                         "the dashboard's). An agent has no business there.")
-    if m := (PACKAGE_RE.search(joined) or REINSTALL_RE.search(joined) or LASTING_ENV_RE.search(joined)
+    if m := ((None if _only_looks(name, input) else PACKAGE_RE.search(joined))
+             or (None if PLAIN_UPGRADE_RE.search(joined) else REINSTALL_RE.search(joined)) or LASTING_ENV_RE.search(joined)
              or AUTH_OFF_RE.search(joined) or LOOSEN_RE.search(joined)):
         return say("tamper", "review", f"This changes Squidbrake itself ({m.group(0).strip()[:80]}): the installed "
                                        "program, a setting that loosens it, or a gateway with sign-in off.")

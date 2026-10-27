@@ -173,6 +173,10 @@ def matches(rule: dict, values: dict, input: Any) -> bool:
                 return False
         except re.error:
             return False
+    if m.get("skip_reads"):                  # a shell command that only looks (same as server._only_reads)
+        import commands
+        if (cmd := commands.command_of(input)) and commands.read(cmd).kind == "read_only":
+            return False
     for field, ops in (m.get("input") or {}).items():
         n = _number(input, field)
         if n is None or not all(op in OPS and OPS[op](n, v) for op, v in ops.items()):

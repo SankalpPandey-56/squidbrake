@@ -12,6 +12,8 @@
 #   input                                    number checks on input fields: {field: {op: number}}, ops gt gte lt lte eq ne,
 #                                            e.g. input: { amount: { gt: 100 } }; "a.b" reaches nested fields; a missing
 #                                            or non-numeric field doesn't match
+#   skip_reads: true                         a shell command that only looks (cat, grep, ls, jq ...) doesn't match;
+#                                            a secret read, a write or a redirect into a file still does
 # action: allow | deny | review
 #
 # Example - let small refunds run on their own (put it above approve-refunds to use it):
@@ -224,6 +226,7 @@ rules:
     reason: Changes an AI agent's own settings, hooks or MCP servers, Squidbrake itself, a secrets file, or code that runs at login
     match:
       name: ["Edit", "Write", "MultiEdit", "NotebookEdit", "bash*", "powershell*", "shell*", "run_command*"]
+      skip_reads: true      # `cat ~/.claude/settings.json` only looks; `cat .env` (a secret) and `sed -i` still wait
       # an agent's own notes (Antigravity's brain/, Claude Code's plans/, todos/ and memory/) are markdown it writes on
       # every task, not its setup: those .md files aren't held. Settings, hooks, CLAUDE.md, commands/ and agents/ still are.
       input_regex: '(?i)\.(claude|cursor|codex|gemini|copilot|kiro|codeium|windsurf|squidbrake)[\\/](?![\\/]*(?:antigravity[\\/]+brain|plans|todos|projects[\\/]+[^"\\/]+[\\/]+memory)[\\/]+(?:(?!\.\.)[^"])*\.md")|mcp(_config)?\.json|claude_desktop_config\.json|\.vscode[\\/]+(mcp|tasks|settings)\.json|Code( - Insiders)?[\\/]+User[\\/]+settings\.json|\.env\b(?![\w.-]*(example|sample|template))|\.ssh[\\/]|\.aws[\\/]|\.(npmrc|pypirc|netrc)\b|\.(bashrc|zshrc|bash_profile|zprofile|profile)\b|PowerShell_profile\.ps1|\.git[\\/]+hooks[\\/]|managed-settings\.json|(/etc/|ProgramData[\\/]+|Program Files[\\/]+|Application Support/)(ClaudeCode|claude-code|codex|gemini-cli|cursor|squidbrake|OpenAI)\b'

@@ -108,6 +108,13 @@ def _default_rules() -> Path:
     return path
 
 
+def _only_reads(input: Any) -> bool:
+    """A shell command that only looks (commands.py: read_only). A secret read, a write or a redirect isn't one."""
+    import commands
+    cmd = commands.command_of(input)
+    return bool(cmd) and commands.read(cmd).kind == "read_only"
+
+
 def update_unedited_rules(path: Path, shipped: Path, known: Path) -> bool:
     """A rules.yaml copied from an older release and never edited gets this release's rules (the old file is kept
     as a backup). An edited one is left alone. `known` lists the sha256 of every rules.yaml ever shipped."""
@@ -983,6 +990,7 @@ class Policy:
             "globs": {f: ([m[f]] if isinstance(m[f], str) else list(m[f])) for f in cls.MATCH_FIELDS if f in m},
             "input_regex": re.compile(m["input_regex"], re.I | re.S) if m.get("input_regex") else None,
             "input_conds": cls._input_conds(m.get("input")),
+            "skip_reads": bool(m.get("skip_reads")),
         }
 
     @classmethod
@@ -995,6 +1003,8 @@ class Policy:
                 input_text = input if isinstance(input, str) else json.dumps(input, default=str, ensure_ascii=False)
             if not compiled["input_regex"].search(input_text):
                 return False
+        if compiled.get("skip_reads") and _only_reads(input):
+            return False
         # A missing or non-numeric field never matches, so the call falls through to later rules.
         return all((n := cls._input_number(input, f)) is not None and op(n, v) for f, op, v in compiled["input_conds"])
 
