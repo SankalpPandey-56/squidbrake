@@ -82,6 +82,20 @@ def test_latency_feedback_and_weekly_report(c, monkeypatch, tmp_path):
     assert c.get("/v1/reports/summary", headers=BOSS).json()["week"]["actions"]["seen"] >= 6
 
 
+def test_report_says_what_it_did_not_measure():
+    """A pilot's review: no feedback is not 0% false positives, non-tool records and warned-but-allowed actions show."""
+    r = {"days": 30, "actions": {"seen": 50, "held": 3, "blocked": 2, "would_hold": 0, "would_block": 0,
+                                 "approved": 0, "rejected": 0, "warned": 4},
+         "other_kinds": {"local_test_summary": 40},
+         "false_positives": {"legit": 0, "stopped": 5, "rated": 0, "rate": None, "by_rule": {}, "by_week": {}},
+         "latency_ms": {"n": 50, "p50": 1.0, "p95": 2.0, "p99": 3.0}, "top_chains": []}
+    md = weekly.markdown(r)
+    assert "not measured" in md and "0.0%" not in md
+    assert "40 `local_test_summary`" in md and "Let through with a warning:** 4" in md
+    r["false_positives"].update(rated=5, rate=0.0)
+    assert "0 of 5 stopped actions were marked legit (0.0%)" in weekly.markdown(r)
+
+
 def test_cli_report_and_feedback(c, capsys, tmp_path):
     held = c.post("/v1/events", headers=H, json={"name": "payments.send", "input": {"amount": 7}}).json()["event_id"]
     assert server.main(["feedback", held, "right"]) == 0

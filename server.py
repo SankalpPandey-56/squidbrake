@@ -2045,16 +2045,22 @@ def taint_signals(conn, ev: "EventIn", client: str, held_setup_change: bool = Fa
     outside = [r for r in rows if r.output and untrusted(r)]
     if not outside:
         return []
-    trusted = [r.input for r in rows if r.kind == "prompt" and r.input] + \
-              [r.output for r in rows if r.output and r.kind != "prompt" and not untrusted(r)]
+    asked = [r.input for r in rows if r.kind == "prompt" and r.input]
+    known = [(r.created_at, r.output) for r in rows if r.output and r.kind != "prompt" and not untrusted(r)]
     out: list[dict] = []
     if sends and tc["untrusted_destination"] != "off":
         # compared with what was stored, so with the same masking (an address keeps its domain and fingerprint)
         for dest in taint.destinations(redact(ev.input), redact(line) if line else line):
             if taint.own_domain(dest, policy.history["company_domains"]):
                 continue
-            hit = next((r for r in outside if taint.appears_in(dest, r.output)), None)
-            if hit and not any(taint.appears_in(dest, t) for t in trusted):
+            hits = [r for r in outside if taint.appears_in(dest, r.output)]
+            if not hits:
+                continue
+            hit, first = hits[0], min(r.created_at for r in hits)
+            # a tool's output vouches only if it had the address before outside content did: after, it may be a copy
+            # of that content (the agent's memory, notes, a cache), G02
+            if not any(taint.appears_in(dest, t) for t in asked) and \
+                    not any(at < first and taint.appears_in(dest, o) for at, o in known):
                 elsewhere = "" if (hit.session_id == ev.session_id if ev.session_id else True) else ", in another conversation"
                 out.append({"check": "untrusted_destination", "effect": tc["untrusted_destination"], "ref": hit.id,
                             "message": f"This sends to {dest['value']} ({dest['field']}), which appears in {hit.name} "
