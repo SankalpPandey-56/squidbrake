@@ -280,7 +280,32 @@ def _shell_outs(path_word: str, cwd: Path) -> list[dict]:
     if p.suffix.lower() in (".rb", ".pl", ".php"):
         lines += [a or b for a, b in _BACKTICKS.findall(text)]
     lines = [l.strip() for l in lines if l.strip()]
-    return [{"via": f"commands {p.name} hands to a shell", "lines": lines}] if lines else []
+    return ([{"via": f"commands {p.name} hands to a shell", "lines": lines}] if lines else []) + _api_delete(text, p.name)
+
+
+def _api_delete(text: str, name: str) -> list[dict]:
+    """A GraphQL delete in a file (requests.post / fetch with mutation { volumeDelete(...) }, a curl -d @body.json),
+    as a curl line the gateway holds. Only the matched words leave this machine, never the file (it may hold keys)."""
+    m = commands.API_DELETE.search(text)
+    return [{"via": f"the API request in {name}", "lines": [f"curl -d '{m.group(0).replace(chr(39), '')}'"]}] if m else []
+
+
+def _request_bodies(line: str, cwd: Path) -> list[dict]:
+    """Files an HTTP call sends: curl -d @q.json, --data-binary @q.json, cat q.json | curl -d @-, curl -T q.json."""
+    try:
+        reading = commands.read(line)
+    except Exception:
+        return []
+    if not any(c.program in commands.HTTP_CLIS for c in reading.commands):
+        return []
+    out = []
+    for word in dict.fromkeys(w.lstrip("@") for c in reading.commands for w in c.words[1:]):
+        if not word or word.startswith("-") or "://" in word:
+            continue
+        p = Path(os.path.expanduser(word.strip("'\"")))
+        text = _read(p if p.is_absolute() else cwd / p)
+        out += _api_delete(text, p.name) if text else []
+    return out
 
 
 def _script(path_word: str, cwd: Path) -> list[dict]:
@@ -316,6 +341,8 @@ def expand(line: str, cwd: str | None = None) -> list[dict]:
     sourced = [c.words[1] for c in reading.commands if c.program in ("source", ".") and len(c.words) > 1]
     for path_word in dict.fromkeys(reading.scripts + sourced):
         out += _shell_outs(path_word, base) if OTHER_LANGUAGES.search(path_word) else _script(path_word, base)
+    for inner in [line] + [l for item in out if item["via"].startswith("script ") for l in item["lines"]]:
+        out += _request_bodies(inner, base)
     total, kept = 0, []
     for item in out:                                                # bounded, in order
         lines = [l[:1000] for l in item["lines"] if l][: MAX_LINES - total]
