@@ -224,7 +224,7 @@ REDIS_DELETE = {"del", "unlink", "hdel", "srem", "zrem", "lrem", "xdel", "getdel
 HTTP_CLIS = {"curl", "wget", "http", "https", "xh", "httpie", "invoke-webrequest", "iwr", "invoke-restmethod", "irm"}
 DNS_CLIS = {"ping", "ping6", "nslookup", "dig", "host", "resolve-dnsname"}
 DNS_SUBST = re.compile(r"\$\([^\)]+\)|`[^`]+`|\$env:[A-Za-z0-9_]+|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}")
-ENCODED_DNS_LABEL = re.compile(r"^[A-Za-z0-9_-]{20,}$")
+ENCODED_DNS_LABEL = re.compile(r"^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9_]{20,}$")   # hex/base64: letters and digits, no hyphens (long ordinary names have them)
 API_DELETE = re.compile(r"\bmutation\b[^{]*\{\s*\w*(delete|destroy|remove|drop|purge|wipe)\w*\s*\(|"
                         r"\bmutation\b[^{]*\{\s*\$\{?\w+\}?\s*\(|"      # mutation { $OP(...) }: named only at run time
                         r"\"(action|op|operation)\"\s*:\s*\"(delete|destroy|remove|drop)\w*\"", re.I)

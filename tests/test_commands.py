@@ -174,6 +174,7 @@ def test_not_read_only(line):
     "ping -c 3 192.168.1.1",
     "dig github.com",
     "nslookup api.openai.com",
+    "ping my-company-staging-database.internal",   # long but ordinary: hyphens, no digits
 ])
 def test_no_false_alarm(line):
     assert kind(line) != "catastrophic"
@@ -197,6 +198,7 @@ def test_no_false_alarm(line):
     # Building or fetching packages: not publishing
     "poetry build", "uv build", "docker pull org/img", "mvn test", "bun install",
     "ping google.com", "ping -c 3 192.168.1.1", "dig github.com", "nslookup api.openai.com",
+    "ping my-company-staging-database.internal",
 ])
 def test_everyday_work_is_not_held(line):
     assert kind(line) in ("other", "read_only"), commands.read(line).summary()
