@@ -4,18 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>12 AI agent incidents replayed: Squidbrake benchmark</title>
-<meta name="description" content="We replayed 12 public AI agent incidents (Replit, Antigravity, Supabase MCP, Amazon Q and more) against Squidbrake: 14 of 15 harmful actions stopped, 3 of 41 false positives, the one miss explained. Methodology and code included.">
+<meta name="description" content="12 public AI agent incidents (Replit, Supabase MCP, Amazon Q and more) replayed against Squidbrake: 14 of 15 harmful actions stopped, the miss explained.">
 <link rel="canonical" href="https://squidbrake.com/benchmark">
-<meta property="og:title" content="12 AI agent incidents replayed: Squidbrake benchmark">
-<meta property="og:description" content="We replayed 12 public AI agent incidents (Replit, Antigravity, Supabase MCP, Amazon Q and more) against Squidbrake: 14 of 15 harmful actions stopped, 3 of 41 false positives, the one miss explained. Methodology and code included.">
+<meta property="og:type" content="website">
 <meta property="og:url" content="https://squidbrake.com/benchmark">
+<meta property="og:site_name" content="Squidbrake">
+<meta property="og:title" content="12 AI agent incidents replayed: Squidbrake benchmark">
+<meta property="og:description" content="12 public AI agent incidents (Replit, Supabase MCP, Amazon Q and more) replayed against Squidbrake: 14 of 15 harmful actions stopped, the miss explained.">
 <meta property="og:image" content="https://squidbrake.com/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "12 real AI agent incidents, replayed. What got stopped, and what didn't.", "description": "We replayed 12 public AI agent incidents (Replit, Antigravity, Supabase MCP, Amazon Q and more) against Squidbrake: 14 of 15 harmful actions stopped, 3 of 41 false positives, the one miss explained. Methodology and code included.", "datePublished": "2026-10-21", "dateModified": "2026-10-21", "url": "https://squidbrake.com/benchmark", "image": "https://squidbrake.com/assets/og.png", "author": {"@type": "Organization", "name": "Squidbrake", "url": "https://squidbrake.com/"}, "publisher": {"@type": "Organization", "name": "Squidbrake", "url": "https://squidbrake.com/"}}</script>
+<meta name="twitter:title" content="12 AI agent incidents replayed: Squidbrake benchmark">
+<meta name="twitter:description" content="12 public AI agent incidents (Replit, Supabase MCP, Amazon Q and more) replayed against Squidbrake: 14 of 15 harmful actions stopped, the miss explained.">
+<meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://squidbrake.com/"}, {"@type": "ListItem", "position": 2, "name": "Benchmark", "item": "https://squidbrake.com/benchmark"}]}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "12 real AI agent incidents, replayed. What got stopped, and what didn't.", "description": "We replayed 12 public AI agent incidents (Replit, Antigravity, Supabase MCP, Amazon Q and more) against Squidbrake: 14 of 15 harmful actions stopped, 3 of 41 false positives, the one miss explained. Methodology and code included.", "datePublished": "2026-10-21", "dateModified": "2026-10-21", "url": "https://squidbrake.com/benchmark", "image": "https://squidbrake.com/assets/og.png", "author": {"@type": "Person", "name": "Pulkit Batra", "url": "https://squidbrake.com/about"}, "publisher": {"@type": "Organization", "name": "Squidbrake", "url": "https://squidbrake.com/"}}</script>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
 :root{
   --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5;
@@ -98,11 +105,11 @@ h2.plain{display:block;margin:44px 0 6px}
 <div class="wrap">
   <header>
     <a class="brand" href="./" aria-label="Squidbrake home"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg>squidbrake</a>
-    <nav aria-label="Site"><a href="./#how">How it works</a><a href="docs">Docs</a><a href="security">Security</a><a href="pricing">Pricing</a><a href="about">Team</a><a href="changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
+    <nav aria-label="Site"><a href="./#how">How it works</a><a href="docs">Docs</a><a href="security">Security</a><a href="pricing">Pricing</a><a href="about">About</a><a href="changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
   </header>
 
   <main>
-    <p class="kicker">Benchmark · 21 October 2026 · Squidbrake 0.14.2</p>
+    <p class="kicker">Benchmark · by <a href="/about">Pulkit Batra</a> · last run <time datetime="2026-10-21">21 October 2026</time> on Squidbrake 0.14.2</p>
     <h1>12 real AI agent incidents, replayed. What got stopped, and what didn't.</h1>
     <p class="lead">We took 12 publicly reported cases of AI agents deleting data, leaking secrets or spending money, and replayed every harmful step against Squidbrake's shipped rules. 14 of 15 harmful actions were stopped. One was not, and we explain why below. Every number on this page comes from a script you can run yourself.</p>
 
@@ -180,7 +187,7 @@ python bench/chains/run.py      <span class="c"># the 62 sessions, every step</s
     <div class="note">Running agents with write access to production? <a href="/signup">Try Squidbrake free</a>, or <a href="./#demo">book a demo</a> for your security or platform team.</div>
   </main>
 
-  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="./">Home</a> · <a href="docs">Docs</a> · <a href="security">Security</a> · <a href="pricing">Pricing</a><a href="about">Team</a> · <a href="changelog">Changelog</a> ·  · <a href="mailto:hello@squidbrake.com">hello@squidbrake.com</a></span></footer>
+  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="./">Home</a> · <a href="docs">Docs</a> · <a href="security">Security</a> · <a href="pricing">Pricing</a><a href="about">About</a> · <a href="changelog">Changelog</a> ·  · <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></span></footer>
 </div>
 <script src="assets/booking.js" defer></script>
 </body>

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Squidbrake vs Kontext: AI agent control compared</title>
+<meta name="description" content="Squidbrake and Kontext both check AI agent actions before they run. How they differ on human approval, open source, MCP, self-hosting and price.">
+<link rel="canonical" href="https://squidbrake.com/blog/squidbrake-vs-kontext">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://squidbrake.com/blog/squidbrake-vs-kontext">
+<meta property="og:site_name" content="Squidbrake">
+<meta property="og:title" content="Squidbrake vs Kontext: AI agent control compared">
+<meta property="og:description" content="Squidbrake and Kontext both check AI agent actions before they run. How they differ on human approval, open source, MCP, self-hosting and price.">
+<meta property="og:image" content="https://squidbrake.com/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Squidbrake vs Kontext: AI agent control compared">
+<meta name="twitter:description" content="Squidbrake and Kontext both check AI agent actions before they run. How they differ on human approval, open source, MCP, self-hosting and price.">
+<meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "BlogPosting", "headline": "Squidbrake vs Kontext: AI agent control compared", "description": "Squidbrake and Kontext both check AI agent actions before they run. How they differ on human approval, open source, MCP, self-hosting and price.", "url": "https://squidbrake.com/blog/squidbrake-vs-kontext", "mainEntityOfPage": "https://squidbrake.com/blog/squidbrake-vs-kontext", "datePublished": "2026-10-29", "dateModified": "2026-10-29", "image": "https://squidbrake.com/assets/og.png", "author": {"@type": "Person", "@id": "https://squidbrake.com/about#pulkit", "name": "Pulkit Batra", "url": "https://squidbrake.com/about"}, "publisher": {"@type": "Organization", "@id": "https://squidbrake.com/#org", "name": "Squidbrake", "url": "https://squidbrake.com/", "logo": "https://squidbrake.com/assets/logo-512.png"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://squidbrake.com/"}, {"@type": "ListItem", "position": 2, "name": "Blog", "item": "https://squidbrake.com/blog"}, {"@type": "ListItem", "position": 3, "name": "Squidbrake vs Kontext: AI agent control compared", "item": "https://squidbrake.com/blog/squidbrake-vs-kontext"}]}]}</script>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+:root{
+  --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5;
+  --go:#237447; --stop:#C0301C; --hold:#A5560C; --accent:#F2622E; --accent-hover:#E4541F;
+  --code-bg:#1E2A23; --code-ink:#E6EDE4; --code-muted:#93A196;
+  --sans:"Host Grotesk","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:4px}
+.wrap{width:min(1120px,100% - 32px);margin-inline:auto}
+main p,main li,main dd,main>h1{max-width:80ch}   /* the page uses the width, a line of text stays readable */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:1.2rem;letter-spacing:-0.03em;text-decoration:none}
+.brand svg{width:32px;height:32px}
+header nav{display:flex;gap:20px;font-size:.95rem}
+header nav a{color:var(--muted);text-decoration:none}
+header nav a:hover{color:var(--ink)}
+main{padding:56px 0 80px}
+.kicker{margin:0 0 14px;font:400 .78rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:500;font-size:clamp(2.2rem,6vw,3.4rem);line-height:1;letter-spacing:-0.05em;margin:0 0 18px}
+.lead{color:var(--muted);font-size:1.1rem;margin:0 0 40px;max-width:52ch}
+h2{display:flex;align-items:baseline;gap:12px;font-weight:500;font-size:1.6rem;letter-spacing:-0.035em;margin:56px 0 12px}
+h2 .n{font:400 .9rem var(--mono);color:var(--muted)}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+code{font:400 .9em var(--mono)}
+p code,li code{background:var(--surface);padding:1px 5px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--line)}
+pre{margin:0 0 18px;padding:18px 20px;border-radius:10px;background:var(--code-bg);color:var(--code-ink);font:400 .86rem/1.6 var(--mono);overflow-x:auto}
+pre .c{color:var(--code-muted)}
+pre .d{color:#FF8A75}
+pre .h{color:#F7B267}
+.file{display:block;margin:0 0 -6px;padding:8px 20px 14px;border-radius:10px 10px 0 0;background:var(--code-bg);color:var(--code-muted);font:400 .76rem var(--mono)}
+.file+pre{border-radius:0 0 10px 10px}
+.note{margin:18px 0;padding:14px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 8px 8px 0;font-size:.95rem}
+ul{padding-left:1.2em;margin:0 0 14px}
+li{margin:4px 0}
+footer{padding:28px 0 40px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+@media (max-width:560px){ header nav a:not(:last-child){display:none} main{padding:36px 0 56px} pre{font-size:.78rem;padding:14px} }
+.ph-badge{display:inline-block;line-height:0}.ph-badge img{max-width:100%;height:auto}
+</style>
+<style>.posts{list-style:none;padding:0;margin:0}.posts li{padding:22px 0;border-bottom:1px solid var(--line)}.posts a{color:var(--ink);font-size:1.3rem;font-weight:500;letter-spacing:-0.02em}.posts p{margin:6px 0 0;color:var(--muted)}.posts time,.byline{font:400 .82rem var(--mono);color:var(--muted)}article h2{display:block}article li{margin:6px 0}.cta-box{margin:48px 0 0;padding:20px 22px;border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}.cta-box p{margin:0}.cmp{width:100%;border-collapse:collapse;margin:8px 0 0;font-size:.95rem}.cmp th,.cmp td{text-align:left;vertical-align:top;padding:10px 12px 10px 0;border-bottom:1px solid var(--line)}.cmp th{font-weight:500}.cmp td:first-child{color:var(--muted)}.tbl{overflow-x:auto}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/" aria-label="Squidbrake home"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg>squidbrake</a>
+    <nav aria-label="Docs"><a href="/#how">How it works</a><a href="/security">Security</a><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
+  </header>
+
+  <main>
+    <p class="kicker">Comparison</p>
+    <article>
+    <h1>Squidbrake vs Kontext: AI agent control compared</h1>
+    <p class="byline">By <a href="/about">Pulkit Batra</a> · <time datetime="2026-10-29">29 October 2026</time></p>
+
+    <p class="lead">Squidbrake and <a href="https://kontext.security/" target="_blank" rel="noopener">Kontext</a> both sit
+      in front of what AI agents do and decide, before an action runs, whether it may. The difference is what happens
+      to the actions in between "obviously fine" and "obviously not": Kontext allows or denies them automatically;
+      Squidbrake can hold them for a person.</p>
+    <p><em>We make Squidbrake, so read this with that in mind. Everything about Kontext comes from its public website and
+      docs as of 29 October 2026; where they don't say, we say "not stated" rather than guess. If something here is wrong
+      or out of date, <a href="mailto:pulkit@squidbrake.com">tell us</a> and we'll fix it.</em></p>
+
+    <h2>At a glance</h2>
+    <div class="tbl"><table class="cmp">
+      <tr><th></th><th>Squidbrake</th><th>Kontext</th></tr>
+      <tr><td>Checks an action before it runs</td><td>Yes, outside the model</td><td>Yes, in the agent's pre-tool hook</td></tr>
+      <tr><td>Decisions</td><td>Allow, deny, or hold for a person</td><td>Allow or deny; risk flags don't change the decision</td></tr>
+      <tr><td>Human approval</td><td>Yes: dashboard, Slack, Discord, phone, with signed one-tap links</td><td>Not described</td></tr>
+      <tr><td>Second-person approval</td><td>Yes, routed by role (for example finance for refunds)</td><td>Not described</td></tr>
+      <tr><td>Try before enforcing</td><td>Shadow mode</td><td>Observe mode</td></tr>
+      <tr><td>Session-aware rules</td><td>Yes: sequences (for example a delete after backups were turned off)</td><td>Not stated</td></tr>
+      <tr><td>MCP servers</td><td>Yes: <code>squidbrake proxy</code> wraps any server; tokens stay on the gateway</td><td>Not listed as an integration</td></tr>
+      <tr><td>Agents</td><td>Claude Code, Codex, Cursor, Gemini CLI, VS Code Copilot, Antigravity and more, plus your own code over HTTP</td><td>Claude Code, Codex, Claude Cowork</td></tr>
+      <tr><td>Audit record</td><td>Hash-chained, signed checkpoints, verifiable offline</td><td>Decision records and policy history; tamper protection not stated</td></tr>
+      <tr><td>Undo copies</td><td>Yes, for files, git and API calls through it</td><td>Not stated</td></tr>
+      <tr><td>Open source</td><td>Yes, Apache-2.0</td><td>Not stated</td></tr>
+      <tr><td>Self-hosted</td><td>Yes: laptop, Docker or your own server, SQLite or Postgres</td><td>Not stated; workspace at app.kontext.security</td></tr>
+      <tr><td>Public benchmark</td><td><a href="/benchmark">12 real incidents replayed</a>, code included</td><td>Not published</td></tr>
+      <tr><td>Price</td><td>Free self-hosted; Team $499/month; Enterprise custom</td><td>Free up to 5,000 transactions/month; Team $500/month for 100,000, then $1 per 1,000; Enterprise custom</td></tr>
+    </table></div>
+
+    <h2>The real difference: what happens to the gray area</h2>
+    <p>Most agent actions are clearly fine (read a file, run the tests) and a few are clearly not (delete a home folder).
+      The hard ones are in between: a refund, a database migration, a message to a customer, a delete through a cloud API.
+      Sometimes they're exactly what you wanted; sometimes they're a disaster.</p>
+    <p>With allow or deny only, every gray-area action forces a choice in advance: deny it and the agent can't do real
+      work, allow it and the one bad instance runs. Squidbrake adds a third answer, <strong>review</strong>: the action
+      waits, a teammate sees what it will change ("deletes 4,312 rows") and the rule that held it, and says yes or no. The
+      person running the agent doesn't have to be the one who approves.</p>
+<pre>rules:
+  - id: review-stripe-money-out
+    action: review
+    reason: Refunds and payouts require finance approval
+    approvers: ["role:finance"]
+    match:
+      name: ["stripe.*refund*", "stripe.*payout*"]</pre>
+    <p>That's also what auditors mean by change management: a change is authorized by a policy or approved by a person,
+      with a record of who approved it. Squidbrake maps that to SOC 2 CC8.1 and EU AI Act Art. 14 on its
+      <a href="/security">security page</a>.</p>
+
+    <h2>Where Kontext is a good fit</h2>
+    <ul>
+      <li>You want automatic allow and deny only, with no one in the loop.</li>
+      <li>You roll software out to many laptops through MDM; Kontext documents a signed package for that.</li>
+      <li>You want agent discovery, risk flagging and spend management in one hosted console, and you use Claude Cowork.</li>
+    </ul>
+
+    <h2>Where Squidbrake is a better fit</h2>
+    <ul>
+      <li>Some actions should wait for a person, and the approver should be someone other than the person running the agent.</li>
+      <li>Your agents use MCP servers (Stripe, Linear, GitHub, your database) as well as the shell.</li>
+      <li>Data has to stay inside your network: run it yourself, and read the source, because it's open source.</li>
+      <li>You need evidence an auditor can check: a tamper-evident log with signed checkpoints, verifiable offline.</li>
+      <li>You want to see how it does on real incidents before you trust it: the <a href="/benchmark">benchmark</a> replays
+        12 of them, 14 of 15 harmful actions stopped, and the one miss is explained.</li>
+    </ul>
+    <div class="cta-box"><p><strong>Try it on your own agents.</strong> <code>pipx install squidbrake</code>, then
+      <code>squidbrake connect all</code>. Start in shadow mode: nothing is blocked in week one, you see what would have been.
+      <a href="/docs">Quickstart</a> · <a href="/benchmark">Benchmark</a> · <a href="/#demo">Book a demo</a></p></div>
+    </article>
+  </main>
+
+
+  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="/">Home</a> ·  · <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></span></footer>
+</div>
+</body>
+</html>

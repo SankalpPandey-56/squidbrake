@@ -3,31 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Squidbrake: agents propose, people approve</title>
-<meta name="description" content="Change control for AI agents. Everyday work runs on its own; anything an agent can't take back waits for a teammate's sign-off, and every action lands on a tamper-evident record.">
+<title>Squidbrake: change control and human approval for AI agents</title>
+<meta name="description" content="Change control for AI agents. Routine work runs on its own; anything an agent can&#x27;t undo waits for a teammate&#x27;s sign-off, on a tamper-evident record.">
 <link rel="canonical" href="https://squidbrake.com/">
 <link rel="alternate" type="text/markdown" href="index.md" title="This page as markdown, for agents">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://squidbrake.com/">
 <meta property="og:site_name" content="Squidbrake">
-<meta property="og:title" content="Squidbrake: agents propose, people approve">
-<meta property="og:description" content="Change control for AI agents. Everyday work runs on its own; anything an agent can't take back waits for a teammate's sign-off, and every action lands on a tamper-evident record.">
+<meta property="og:title" content="Squidbrake: change control and human approval for AI agents">
+<meta property="og:description" content="Change control for AI agents. Routine work runs on its own; anything an agent can&#x27;t undo waits for a teammate&#x27;s sign-off, on a tamper-evident record.">
 <meta property="og:image" content="https://squidbrake.com/assets/og.png">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"Organization","@id":"https://squidbrake.com/#org","name":"Squidbrake","url":"https://squidbrake.com/","logo":"https://squidbrake.com/assets/og.png","sameAs":["https://github.com/batrapulkit/squidbrake","https://pypi.org/project/squidbrake/","https://www.producthunt.com/products/squidbrake","https://www.linkedin.com/company/squidbrake","https://www.crunchbase.com/organization/squidbrake","https://wellfound.com/company/squidbrake"]},
+ {"@type":"Organization","@id":"https://squidbrake.com/#org","name":"Squidbrake","url":"https://squidbrake.com/","logo":"https://squidbrake.com/assets/logo-512.png","sameAs":["https://github.com/batrapulkit/squidbrake","https://pypi.org/project/squidbrake/","https://www.producthunt.com/products/squidbrake","https://www.linkedin.com/company/squidbrake","https://www.crunchbase.com/organization/squidbrake","https://wellfound.com/company/squidbrake"]},
  {"@type":"SoftwareApplication","name":"Squidbrake","url":"https://squidbrake.com/","description":"Change control for AI agents. Everyday work runs on its own; anything an agent can't take back waits for a teammate's sign-off, and every action lands on a tamper-evident record.","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","license":"https://www.apache.org/licenses/LICENSE-2.0","publisher":{"@id":"https://squidbrake.com/#org"},
-  "offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"USD"},{"@type":"Offer","name":"Team","price":"499","priceCurrency":"USD","description":"Per month, one team"}]}
+  "offers":[{"@type":"Offer","name":"Free","price":"0","priceCurrency":"USD"},{"@type":"Offer","name":"Team","price":"499","priceCurrency":"USD","description":"Per month, one team"}]},
+ {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Does any of our data leave our network?", "acceptedAnswer": {"@type": "Answer", "text": "No. Squidbrake runs where you run it, on a laptop or in your cloud. Tool calls, results and the audit log stay in your database."}}, {"@type": "Question", "name": "Does it use an LLM to decide?", "acceptedAnswer": {"@type": "Answer", "text": "No. Decisions come from your rules, a command parser and the agent's recent history. The same call gets the same answer every time, and every answer names the rule that made it."}}, {"@type": "Question", "name": "What happens if Squidbrake is down?", "acceptedAnswer": {"@type": "Answer", "text": "You choose. By default a call that can't be checked doesn't run. Set GATEWAY_FAIL_OPEN if you'd rather keep agents moving."}}, {"@type": "Question", "name": "Can the agent get around it?", "acceptedAnswer": {"@type": "Answer", "text": "It's built for the common case: a cooperative agent that makes a mistake, or follows instructions it read in an email, a web page or an issue. Everything that goes through a connected tool is checked outside the model, where a prompt can't rewrite it. That includes the agent trying to change its own settings or Squidbrake's rules, which waits for a person. It doesn't see inside a script the agent writes and then runs, or tools you haven't connected. For an agent you don't trust at all, run it in a sandbox too."}}, {"@type": "Question", "name": "Doesn't auto mode already handle this?", "acceptedAnswer": {"@type": "Answer", "text": "Keep auto mode for everyday work: it should decide the 99% of steps that are easy to undo. Squidbrake is for the 1% you can't take back, and there the person running the agent shouldn't be the only one saying yes. A teammate approves, with the effect in front of them, and a wrong yes can often be undone."}}, {"@type": "Question", "name": "How does this help with SOC 2?", "acceptedAnswer": {"@type": "Answer", "text": "SOC 2's change-management control asks that changes be authorized and approved. Once agents change production, your auditor will ask who approved what they changed. Squidbrake records a second person's approval for every risky step in a tamper-evident log, and the evidence pack puts it on one page. It supports your evidence; your auditor decides what it satisfies."}}, {"@type": "Question", "name": "Will it slow our agents down?", "acceptedAnswer": {"@type": "Answer", "text": "The check takes 3.3 ms at the median and 9 ms at p95 on a laptop. A model takes seconds to choose a tool."}}, {"@type": "Question", "name": "How do we start without breaking anything?", "acceptedAnswer": {"@type": "Answer", "text": "Turn on shadow mode. For the first week nothing is blocked. You see what would have been, then decide what to enforce."}}]}
 ]}
 </script>
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Squidbrake: agents propose, people approve">
-<meta name="twitter:description" content="Change control for AI agents. Everyday work runs on its own; anything an agent can't take back waits for a teammate's sign-off, and every action lands on a tamper-evident record.">
+<meta name="twitter:title" content="Squidbrake: change control and human approval for AI agents">
+<meta name="twitter:description" content="Change control for AI agents. Routine work runs on its own; anything an agent can&#x27;t undo waits for a teammate&#x27;s sign-off, on a tamper-evident record.">
 <meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
 :root{
   --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5; --soft:#DCE3D8;
@@ -64,6 +66,13 @@ a{color:inherit}
 .stage .fallback{display:none;position:absolute;left:50%;top:66%;width:min(44vh,400px);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#c3cfc0 35%,#6f8373 100%)}
 .no-webgl .stage .fallback{display:block}
 .no-webgl .stage canvas{display:none}
+/* phones skip the 3D scene (see the three.js loader): the copy, then a still of it, no scroll-driven stage */
+@media (pointer:coarse) and (max-width:820px){
+  .no-webgl .scrolly{height:auto}
+  .no-webgl .stage{position:relative;display:flex;flex-direction:column;height:auto;min-height:0}
+  .no-webgl .stage .overlay,.no-webgl .stage .inside,.no-webgl .stage .hero-controls,.no-webgl .stage .grain{display:none}
+  .no-webgl .stage .fallback{order:1;position:static;transform:none;width:min(88vw,420px);margin:4px auto 28px;border-radius:0;aspect-ratio:720/706;background:url(/assets/hero-still.webp) center/contain no-repeat;-webkit-mask:linear-gradient(90deg,#0000,#000 8% 92%,#0000),linear-gradient(#0000,#000 8% 92%,#0000);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,#0000,#000 8% 92%,#0000),linear-gradient(#0000,#000 8% 92%,#0000);mask-composite:intersect}
+}
 .hero-ui{position:relative;z-index:2;pointer-events:none;opacity:calc(1 - var(--exit,0));transform:translateY(calc(var(--exit,0) * -36px))}
 .exited .hero-ui a,.exited .hero-ui button,.exited .hero-controls>*{pointer-events:none!important}
 .hero-controls{opacity:calc(1 - var(--exit,0))}
@@ -684,9 +693,9 @@ section .fine code,.faq code{font:400 .92em var(--mono)}
       <a href="#incidents">Incidents</a>
       <a href="#product">Product</a>
       <a href="#how">How it works</a>
-      <a href="docs.html">Docs</a>
+      <a href="/docs">Docs</a>
       <a href="security">Security</a>
-      <a href="pricing">Pricing</a><a href="about">Team</a>
+      <a href="pricing">Pricing</a><a href="about">About</a>
       
       <a href="#demo" data-demo>Book a demo</a>
       <a class="btn" href="/signup">Sign up free</a>
@@ -717,16 +726,16 @@ section .fine code,.faq code{font:400 .92em var(--mono)}
         <a href="#incidents">Incidents</a>
         <a href="#product">Product</a>
         <a href="#how">How it works</a>
-        <a href="docs.html">Docs</a>
+        <a href="/docs">Docs</a>
         <a href="security">Security</a>
-        <a href="pricing">Pricing</a><a href="about">Team</a>
+        <a href="pricing">Pricing</a><a href="about">About</a>
         
         <a href="#demo" data-demo>Book a demo</a>
       <a class="btn" href="/signup">Sign up free</a>
       </nav>
     </header>
     <main id="top" class="hero-copy">
-      <div class="hero-main"><p class="eyebrow"><a class="ef" href="https://www.joinef.com" target="_blank" rel="noopener"><img src="assets/ef-mark.png" alt="" width="22" height="22">Backed by Entrepreneur First</a></p>
+      <div class="hero-main"><p class="eyebrow"><a class="ef" href="https://www.joinef.com" target="_blank" rel="noopener"><img src="assets/ef-mark.png" alt="" width="22" height="22">Backed by Entrepreneur First</a><span class="oss">Change control for AI agents</span></p>
       <h1><span class="reveal"><span>Agents propose.</span></span><span class="reveal"><span>People approve.</span></span></h1></div>
       <div class="hero-side">
         <p class="lede">Change control for AI agents. Everyday work runs on its own. When an agent wants to do something it can't take back, a teammate sees what it will change ("deletes 4,312 rows", "destroys the prod database") and says yes or no.</p>
@@ -1003,7 +1012,7 @@ section .fine code,.faq code{font:400 .92em var(--mono)}
         <p class="ask"><a class="link" href="#connect">Everything it connects to</a> · Using something else? If it makes tool calls, we can wrap it. <a class="link" href="#demo" data-demo>Ask us</a></p>
       </div>
       <div class="term" role="region" aria-label="Terminal: installing Squidbrake and a blocked command">
-        <div class="term-bar"><span>Terminal</span><a href="docs.html">Full quickstart</a></div>
+        <div class="term-bar"><span>Terminal</span><a href="/docs">Full quickstart</a></div>
 <pre><span class="p">$</span> pipx install squidbrake
 <span class="p">$</span> squidbrake connect all
 <span class="p">$</span> squidbrake
@@ -1075,12 +1084,13 @@ plan/ ~/). Don't try to work around it.</span></pre>
         <a href="#incidents">Incidents</a>
         <a href="#product">Product</a>
         <a href="#how">How it works</a>
-        <a href="docs.html">Docs</a>
+        <a href="/docs">Docs</a>
         <a href="security">Security</a>
-        <a href="pricing">Pricing</a><a href="about">Team</a>
+        <a href="pricing">Pricing</a><a href="about">About</a>
         <a href="changelog">Changelog</a>
         <a href="benchmark">Benchmark</a>
-        <a href="mailto:hello@squidbrake.com">hello@squidbrake.com</a>
+        <a href="/blog">Blog</a>
+        <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a>
       </nav>
     </div>
     <div class="foot-bot"><span>© 2026 Squidbrake, Inc.</span><span class="agents">For agents: <a href="llms.txt">llms.txt</a> · <a href="index.md">this page as markdown</a></span><a href="security">Security and privacy</a></div>
@@ -1129,7 +1139,7 @@ plan/ ~/). Don't try to work around it.</span></pre>
 <script>
 /* Shown only if the waitlist server cannot be reached. */
 window.SQUIDBRAKE_WAITLIST={
-  fallbackEmail:'hello@squidbrake.com'
+  fallbackEmail:'pulkit@squidbrake.com'
 };
 </script>
 <script>
@@ -1317,7 +1327,6 @@ window.SQUIDBRAKE_WAITLIST={
   });
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 (function(){
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1525,11 +1534,16 @@ window.SQUIDBRAKE_WAITLIST={
   }
   setTimeout(()=>start(0), reduce?0:2300);
 
-  /* three.js */
+  /* three.js: fetched after the page has loaded, so it never holds up first paint; phones get the still fallback */
+  function noGL(){ document.documentElement.classList.add('no-webgl'); tags.forEach((t,i)=>{ t.el.style.left=SLOT_FALLBACK[i][0]+'%'; t.el.style.top=SLOT_FALLBACK[i][1]+'%'; }); }
+  if(matchMedia('(pointer:coarse) and (max-width:820px)').matches){ noGL(); return; }
+  function loadThree(){ const js=document.createElement('script'); js.src='https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js'; js.onload=three; js.onerror=noGL; document.head.appendChild(js); }
+  if(document.readyState==='complete') loadThree(); else addEventListener('load',loadThree);
+  function three(){
   const canvas=document.getElementById('scene');
   let renderer;
   try{ if(!window.THREE) throw 0; renderer=new THREE.WebGLRenderer({canvas,antialias:true}); }
-  catch(e){ document.documentElement.classList.add('no-webgl'); tags.forEach((t,i)=>{ t.el.style.left=SLOT_FALLBACK[i][0]+'%'; t.el.style.top=SLOT_FALLBACK[i][1]+'%'; }); return; }
+  catch(e){ noGL(); return; }
   const PHONE=matchMedia('(pointer:coarse) and (max-width:820px)').matches;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,PHONE?1.5:2));
   renderer.outputEncoding=THREE.sRGBEncoding;
@@ -2013,6 +2027,7 @@ window.SQUIDBRAKE_WAITLIST={
     });
   }
   frame();
+  }
 })();
 </script>
 <script src="assets/booking.js" defer></script>

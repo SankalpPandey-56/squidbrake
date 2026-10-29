@@ -1,4 +1,24 @@
+# Content-Signal: search=yes means index and link to us; ai-input=yes means AI answers may quote us with a link;
+# ai-train=yes means models may learn from them. See https://contentsignals.org
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Disallow: /admin
+Disallow: /start/
+Disallow: /go/
+Disallow: /v1/
+
+# AI assistants and answer engines: welcome to read and cite the public pages
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+Allow: /
 Disallow: /admin
 Disallow: /start/
 Disallow: /go/

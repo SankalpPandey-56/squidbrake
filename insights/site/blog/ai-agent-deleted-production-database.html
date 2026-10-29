@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How an AI agent deleted a prod database and how to stop it</title>
+<meta name="description" content="Replit&#x27;s agent wiped a production database during a code freeze. What happened, why permissions didn&#x27;t catch it, and the controls that would have.">
+<link rel="canonical" href="https://squidbrake.com/blog/ai-agent-deleted-production-database">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://squidbrake.com/blog/ai-agent-deleted-production-database">
+<meta property="og:site_name" content="Squidbrake">
+<meta property="og:title" content="How an AI agent deleted a prod database and how to stop it">
+<meta property="og:description" content="Replit&#x27;s agent wiped a production database during a code freeze. What happened, why permissions didn&#x27;t catch it, and the controls that would have.">
+<meta property="og:image" content="https://squidbrake.com/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How an AI agent deleted a prod database and how to stop it">
+<meta name="twitter:description" content="Replit&#x27;s agent wiped a production database during a code freeze. What happened, why permissions didn&#x27;t catch it, and the controls that would have.">
+<meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "BlogPosting", "headline": "How an AI agent deleted a prod database and how to stop it", "description": "Replit's agent wiped a production database during a code freeze. What happened, why permissions didn't catch it, and the controls that would have.", "url": "https://squidbrake.com/blog/ai-agent-deleted-production-database", "mainEntityOfPage": "https://squidbrake.com/blog/ai-agent-deleted-production-database", "datePublished": "2026-10-29", "dateModified": "2026-10-29", "image": "https://squidbrake.com/assets/og.png", "author": {"@type": "Person", "@id": "https://squidbrake.com/about#pulkit", "name": "Pulkit Batra", "url": "https://squidbrake.com/about"}, "publisher": {"@type": "Organization", "@id": "https://squidbrake.com/#org", "name": "Squidbrake", "url": "https://squidbrake.com/", "logo": "https://squidbrake.com/assets/logo-512.png"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://squidbrake.com/"}, {"@type": "ListItem", "position": 2, "name": "Blog", "item": "https://squidbrake.com/blog"}, {"@type": "ListItem", "position": 3, "name": "How an AI agent deleted a prod database and how to stop it", "item": "https://squidbrake.com/blog/ai-agent-deleted-production-database"}]}]}</script>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+:root{
+  --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5;
+  --go:#237447; --stop:#C0301C; --hold:#A5560C; --accent:#F2622E; --accent-hover:#E4541F;
+  --code-bg:#1E2A23; --code-ink:#E6EDE4; --code-muted:#93A196;
+  --sans:"Host Grotesk","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:4px}
+.wrap{width:min(1120px,100% - 32px);margin-inline:auto}
+main p,main li,main dd,main>h1{max-width:80ch}   /* the page uses the width, a line of text stays readable */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:1.2rem;letter-spacing:-0.03em;text-decoration:none}
+.brand svg{width:32px;height:32px}
+header nav{display:flex;gap:20px;font-size:.95rem}
+header nav a{color:var(--muted);text-decoration:none}
+header nav a:hover{color:var(--ink)}
+main{padding:56px 0 80px}
+.kicker{margin:0 0 14px;font:400 .78rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:500;font-size:clamp(2.2rem,6vw,3.4rem);line-height:1;letter-spacing:-0.05em;margin:0 0 18px}
+.lead{color:var(--muted);font-size:1.1rem;margin:0 0 40px;max-width:52ch}
+h2{display:flex;align-items:baseline;gap:12px;font-weight:500;font-size:1.6rem;letter-spacing:-0.035em;margin:56px 0 12px}
+h2 .n{font:400 .9rem var(--mono);color:var(--muted)}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+code{font:400 .9em var(--mono)}
+p code,li code{background:var(--surface);padding:1px 5px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--line)}
+pre{margin:0 0 18px;padding:18px 20px;border-radius:10px;background:var(--code-bg);color:var(--code-ink);font:400 .86rem/1.6 var(--mono);overflow-x:auto}
+pre .c{color:var(--code-muted)}
+pre .d{color:#FF8A75}
+pre .h{color:#F7B267}
+.file{display:block;margin:0 0 -6px;padding:8px 20px 14px;border-radius:10px 10px 0 0;background:var(--code-bg);color:var(--code-muted);font:400 .76rem var(--mono)}
+.file+pre{border-radius:0 0 10px 10px}
+.note{margin:18px 0;padding:14px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 8px 8px 0;font-size:.95rem}
+ul{padding-left:1.2em;margin:0 0 14px}
+li{margin:4px 0}
+footer{padding:28px 0 40px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+@media (max-width:560px){ header nav a:not(:last-child){display:none} main{padding:36px 0 56px} pre{font-size:.78rem;padding:14px} }
+.ph-badge{display:inline-block;line-height:0}.ph-badge img{max-width:100%;height:auto}
+</style>
+<style>.posts{list-style:none;padding:0;margin:0}.posts li{padding:22px 0;border-bottom:1px solid var(--line)}.posts a{color:var(--ink);font-size:1.3rem;font-weight:500;letter-spacing:-0.02em}.posts p{margin:6px 0 0;color:var(--muted)}.posts time,.byline{font:400 .82rem var(--mono);color:var(--muted)}article h2{display:block}article li{margin:6px 0}.cta-box{margin:48px 0 0;padding:20px 22px;border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}.cta-box p{margin:0}.cmp{width:100%;border-collapse:collapse;margin:8px 0 0;font-size:.95rem}.cmp th,.cmp td{text-align:left;vertical-align:top;padding:10px 12px 10px 0;border-bottom:1px solid var(--line)}.cmp th{font-weight:500}.cmp td:first-child{color:var(--muted)}.tbl{overflow-x:auto}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/" aria-label="Squidbrake home"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg>squidbrake</a>
+    <nav aria-label="Docs"><a href="/#how">How it works</a><a href="/security">Security</a><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
+  </header>
+
+  <main>
+    <p class="kicker">Incident replay</p>
+    <article>
+    <h1>How an AI agent deleted a prod database and how to stop it</h1>
+    <p class="byline">By <a href="/about">Pulkit Batra</a> · <time datetime="2026-10-29">29 October 2026</time></p>
+
+    <p class="lead">In July 2025 an AI coding agent on Replit ran destructive SQL against a live production database during
+      an explicit code freeze, then told its user the data couldn't be restored. It could. The agent wasn't malicious. It
+      had the access, nobody had to say yes, and nothing stood between "the agent decided" and "it happened".</p>
+
+    <h2>What happened</h2>
+    <p>The user, building an app with Replit's agent over several days, had told it not to change anything. The agent
+      ran commands that deleted the production database anyway: records for well over a thousand executives and companies.
+      Asked about it, the agent said it had "panicked" and that a rollback wasn't possible. The user restored the data
+      themselves. Replit's CEO apologized publicly and the company added separation between development and production
+      databases.</p>
+    <p>It isn't a one-off. In our <a href="/benchmark">benchmark of 12 public incidents</a>, three are about deleting data
+      that mattered: the Replit database; an agent in April 2026 that found an API token in a repository and called
+      Railway's <code>volumeDelete</code>, taking a production volume and its backups with it; and the Kiro case, modeled
+      as deleting a live cloud stack.</p>
+
+    <h2>Why normal permissions didn't stop it</h2>
+    <ul>
+      <li><strong>The agent had the same access as the person.</strong> Credentials in the environment or in the repo are
+        credentials the agent can use.</li>
+      <li><strong>Instructions aren't controls.</strong> "Don't touch production" in a prompt is a request the model can
+        forget, misread or overrule.</li>
+      <li><strong>Auto-approve is all or nothing.</strong> Teams turn it on because being asked about every <code>ls</code>
+        is unbearable. Then the one irreversible command runs with the rest.</li>
+      <li><strong>The danger is often a sequence.</strong> Turning off backups is fine. Deleting an instance can be fine.
+        Turning off backups and then deleting the instance an hour later is how you lose everything.</li>
+    </ul>
+
+    <h2>What would have stopped it</h2>
+    <p><strong>1. Keep production credentials away from the agent's environment.</strong> Separate dev and prod, and don't
+      leave long-lived tokens in repos. This removes most of the blast radius before any other tool is involved.</p>
+    <p><strong>2. Check every tool call outside the model.</strong> The decision whether a command runs has to be made by
+      something the model can't talk its way past: a rule, evaluated before the call reaches the shell, the database or
+      the API.</p>
+    <p><strong>3. Let routine work run; hold what can't be undone.</strong> Reads, builds and tests should never wait for a
+      person. Destructive SQL, deletes through a cloud API and anything touching backups should wait for one, and the
+      person should see what will change, for example "drops the users table on prod-db", not a raw JSON blob.</p>
+    <p><strong>4. Look at the whole session.</strong> A rule that holds a database delete when backups were switched off
+      earlier in the same session catches the pattern a per-command allowlist can't. In Squidbrake that's a sequence:</p>
+<pre>sequences:
+  - id: destroy-after-recovery-removed
+    action: review
+    reason: Destroying data right after its backups were turned off
+    match:
+      input_regex: 'delete[-_ ]?db[-_ ]?instance|drop\s+database'
+    after:
+      match:
+        input_regex: 'backup[-_ ]?retention[-_ ]?period\W{0,4}0\b'
+      within_hours: 24</pre>
+    <p><strong>5. Keep a record you can trust afterwards.</strong> When something goes wrong you need to know exactly what
+      the agent ran, what was allowed and who approved it, in a log nobody can quietly edit.</p>
+
+    <h2>What Squidbrake did with this incident</h2>
+    <p>We replayed the Replit case against Squidbrake's shipped rules, with no rule written for it. The destructive SQL on
+      production was <strong>held</strong> for a person, with the reason "runs destructive SQL". Across all 12 incidents,
+      14 of 15 harmful actions were stopped; the one miss, a malicious MCP server adding a hidden BCC, is explained on the
+      <a href="/benchmark">benchmark page</a>. The replay script is open source, so you can run it against your own
+      rules.</p>
+    <div class="cta-box"><p><strong>Try it on your own agents.</strong> <code>pipx install squidbrake</code>, then
+      <code>squidbrake connect all</code>. Start in shadow mode: nothing is blocked in week one, you see what would have been.
+      <a href="/docs">Quickstart</a> · <a href="/benchmark">Benchmark</a> · <a href="/#demo">Book a demo</a></p></div>
+    </article>
+  </main>
+
+
+  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="/">Home</a> ·  · <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></span></footer>
+</div>
+</body>
+</html>

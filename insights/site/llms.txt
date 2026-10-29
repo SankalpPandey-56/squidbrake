@@ -19,11 +19,19 @@ Coding agents (Claude Code, Cursor, Codex, Gemini CLI, VS Code Copilot, Antigrav
 
 ## Evidence
 
-- [Incident replays](https://github.com/batrapulkit/squidbrake/tree/main/incidents): 10 public AI-agent incidents replayed against the shipped rules. 12 of 13 harmful actions stopped, and the one it misses is documented. Run `python incidents/replay.py`.
-- [Benchmark](https://github.com/batrapulkit/squidbrake/tree/main/bench/chains): 52 agent sessions through normal permissions and Squidbrake. 30 of 31 harmful sessions stopped with 2 false positives in 34 everyday steps; an allowlist stops 23 with 10.
+- [Benchmark write-up](https://squidbrake.com/benchmark): 12 public AI-agent incidents replayed against the shipped rules (last run 21 Oct 2026, v0.14.2). 14 of 15 harmful actions stopped, the one miss documented. Code: [incidents](https://github.com/batrapulkit/squidbrake/tree/main/incidents), `python incidents/replay.py`.
+- [Session benchmark](https://github.com/batrapulkit/squidbrake/tree/main/bench/chains): 62 agent sessions, 113 steps. Squidbrake on whole sessions stopped 65 of 66 harmful steps and held 3 of 41 routine ones; an allowlist stopped 53 and held 10; asking for everything held 40.
 - [Default policy](https://github.com/batrapulkit/squidbrake/blob/main/rules.yaml): the rules Squidbrake ships with
+
+## Guides
+
+- [How an AI agent deleted a production database, and how to stop it](https://squidbrake.com/blog/ai-agent-deleted-production-database)
+- [Human-in-the-loop approval for AI agents](https://squidbrake.com/blog/human-in-the-loop-approval-for-ai-agents)
+- [MCP security checklist](https://squidbrake.com/blog/mcp-security-checklist)
+- [EU AI Act Article 14: human oversight for AI agents](https://squidbrake.com/blog/eu-ai-act-article-14-human-oversight-ai-agents)
+- [Squidbrake vs Kontext](https://squidbrake.com/blog/squidbrake-vs-kontext): human approval, open source, MCP, self-hosting, price
 
 ## Contact
 
-- Email: hello@squidbrake.com
+- Email: pulkit@squidbrake.com
 - Book a 30-minute demo: https://calendly.com/pulkitbatra2024/new-meeting-1

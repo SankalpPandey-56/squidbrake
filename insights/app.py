@@ -30,7 +30,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 HERE = Path(__file__).resolve().parent
@@ -1284,7 +1284,7 @@ def signup(s: SignupIn, request: Request, authorization: str = Header(default=""
             return {"ok": True, "link": f"{public_url(request)}/start/{had['code']}"}
         if had:
             raise HTTPException(409, "this email already signed up: use your setup link from last time, or write to "
-                                     "hello@squidbrake.com")
+                                     "pulkit@squidbrake.com")
         if not s.name.strip() or not s.company.strip():
             raise HTTPException(422, "please add your name and company")
         # hosted: the request waits for you to approve it in the admin (no gateway is started on its own)
@@ -1303,7 +1303,7 @@ def signup(s: SignupIn, request: Request, authorization: str = Header(default=""
     return {"ok": True, "link": f"{public_url(request)}/start/{code}"}
 
 
-@app.get("/signup", response_class=HTMLResponse)
+@app.api_route("/signup", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def signup_page():
     config = {"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_ANON_KEY}
     return HTMLResponse(PAGE("signup.html").replace("__CONFIG__", json.dumps(config).replace("</", "<\\/")))
@@ -1575,8 +1575,18 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 SITE = HERE / "site"
 SITE_PAGES = {"": "index.html", "docs": "docs.html", "security": "security.html", "pricing": "pricing.html",
               "changelog": "changelog.html", "about": "about.html", "benchmark": "benchmark.html", "index.md": "index.md",
-              "llms.txt": "llms.txt", "robots.txt": "robots.txt", "sitemap.xml": "sitemap.xml"}
-SITE_PAGES |= {v: v for v in SITE_PAGES.values()}
+              "llms.txt": "llms.txt", "robots.txt": "robots.txt", "sitemap.xml": "sitemap.xml",
+              "favicon.ico": "favicon.ico", ".well-known/security.txt": "security.txt", "blog": "blog/index.html"}
+if (SITE / "blog").is_dir():
+    SITE_PAGES |= {f"blog/{p.stem}": f"blog/{p.name}" for p in (SITE / "blog").glob("*.html") if p.stem != "index"}
+CLEAN = {v: k for k, v in SITE_PAGES.items() if v.endswith(".html")}   # docs.html -> /docs: one address per page
+# Inline scripts and styles are part of every page; everything else is listed. Calendly is the booking widget.
+SITE_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://assets.calendly.com "
+            "https://plausible.io; style-src 'self' 'unsafe-inline' https://assets.calendly.com; img-src 'self' data: https:; "
+            "font-src 'self'; connect-src 'self' https://plausible.io; frame-src https://calendly.com; "
+            "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'")
+SECURITY_HEADERS = {"Strict-Transport-Security": "max-age=31536000", "X-Content-Type-Options": "nosniff",
+                    "Referrer-Policy": "strict-origin-when-cross-origin"}
 OLD_HOSTS = {h.strip().lower() for h in os.getenv("INSIGHTS_REDIRECT_HOSTS", "").split(",") if h.strip()}
 STAY = ("/v1/", "/install.", "/go/", "/health", "/assets/")       # installs and posted links call these by address
 
@@ -1590,7 +1600,12 @@ async def one_site(request: Request, call_next):
     if PUBLIC_URL and host in OLD_HOSTS and request.method == "GET" and not request.url.path.startswith(STAY):
         return RedirectResponse(PUBLIC_URL + request.url.path + (f"?{request.url.query}" if request.url.query else ""),
                                 status_code=301)
-    return await call_next(request)
+    response = await call_next(request)
+    for k, v in SECURITY_HEADERS.items():
+        response.headers.setdefault(k, v)
+    if request.url.path.startswith("/assets/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=86400")
+    return response
 
 
 # ---- share cards: one catch, a week, the incident score, as a page people post (squidbrake.com/caught?...).
@@ -1652,13 +1667,19 @@ def score_card(request: Request, n: int = Query(..., ge=0, le=100), of: int = Qu
                  ["each one replayed step by step against the rules", "squidbrake.com/benchmark shows every one"])
 
 
-@app.get("/{page}", include_in_schema=False)
-@app.get("/", include_in_schema=False)
+# HEAD too: crawlers and link checkers send it, and a 405 reads to them as a broken page.
+@app.api_route("/{page:path}", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def site_page(page: str = ""):
+    if page in CLEAN:
+        return RedirectResponse(f"/{CLEAN[page]}", status_code=301)
     name = SITE_PAGES.get(page)
     if not name or not (SITE / name).is_file():
         raise HTTPException(404)
     if name.endswith(".html"):
-        return HTMLResponse((SITE / name).read_text(encoding="utf-8"))
+        return HTMLResponse((SITE / name).read_text(encoding="utf-8"),
+                            headers={"Content-Security-Policy": SITE_CSP, "Cache-Control": "public, max-age=300"})
+    if name.endswith(".ico"):
+        return FileResponse(SITE / name, media_type="image/x-icon", headers={"Cache-Control": "public, max-age=86400"})
     kind = {".md": "text/markdown", ".xml": "application/xml"}.get(Path(name).suffix, "text/plain")
     return PlainTextResponse((SITE / name).read_text(encoding="utf-8"), media_type=f"{kind}; charset=utf-8")

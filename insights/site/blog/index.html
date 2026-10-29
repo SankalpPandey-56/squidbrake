@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Squidbrake blog: securing AI agents in production</title>
+<meta name="description" content="Guides on securing AI agents: human approval for risky actions, MCP security, replays of real AI agent incidents and EU AI Act human oversight.">
+<link rel="canonical" href="https://squidbrake.com/blog">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://squidbrake.com/blog">
+<meta property="og:site_name" content="Squidbrake">
+<meta property="og:title" content="Squidbrake blog: securing AI agents in production">
+<meta property="og:description" content="Guides on securing AI agents: human approval for risky actions, MCP security, replays of real AI agent incidents and EU AI Act human oversight.">
+<meta property="og:image" content="https://squidbrake.com/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Squidbrake blog: securing AI agents in production">
+<meta name="twitter:description" content="Guides on securing AI agents: human approval for risky actions, MCP security, replays of real AI agent incidents and EU AI Act human oversight.">
+<meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "Blog", "name": "Squidbrake blog", "url": "https://squidbrake.com/blog", "publisher": {"@type": "Organization", "@id": "https://squidbrake.com/#org", "name": "Squidbrake", "url": "https://squidbrake.com/", "logo": "https://squidbrake.com/assets/logo-512.png"}, "blogPost": [{"@type": "BlogPosting", "headline": "How an AI agent deleted a prod database and how to stop it", "url": "https://squidbrake.com/blog/ai-agent-deleted-production-database", "datePublished": "2026-10-29"}, {"@type": "BlogPosting", "headline": "Human-in-the-loop approval for AI agents: what to ask about", "url": "https://squidbrake.com/blog/human-in-the-loop-approval-for-ai-agents", "datePublished": "2026-10-29"}, {"@type": "BlogPosting", "headline": "MCP security checklist: 10 controls for AI agent tools", "url": "https://squidbrake.com/blog/mcp-security-checklist", "datePublished": "2026-10-29"}, {"@type": "BlogPosting", "headline": "EU AI Act Article 14: human oversight for AI agents", "url": "https://squidbrake.com/blog/eu-ai-act-article-14-human-oversight-ai-agents", "datePublished": "2026-10-29"}, {"@type": "BlogPosting", "headline": "Squidbrake vs Kontext: AI agent control compared", "url": "https://squidbrake.com/blog/squidbrake-vs-kontext", "datePublished": "2026-10-29"}]}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://squidbrake.com/"}, {"@type": "ListItem", "position": 2, "name": "Blog", "item": "https://squidbrake.com/blog"}]}]}</script>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+:root{
+  --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5;
+  --go:#237447; --stop:#C0301C; --hold:#A5560C; --accent:#F2622E; --accent-hover:#E4541F;
+  --code-bg:#1E2A23; --code-ink:#E6EDE4; --code-muted:#93A196;
+  --sans:"Host Grotesk","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#121A15; --surface:#1A241E; --ink:#E6EDE4; --muted:#A3B0A6; --line:#2B3830; --go:#5CC98A; --stop:#FF6A55; --hold:#E9A15A; --code-bg:#0B110D; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:4px}
+.wrap{width:min(1120px,100% - 32px);margin-inline:auto}
+main p,main li,main dd,main>h1{max-width:80ch}   /* the page uses the width, a line of text stays readable */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:8px;font-weight:500;font-size:1.2rem;letter-spacing:-0.03em;text-decoration:none}
+.brand svg{width:32px;height:32px}
+header nav{display:flex;gap:20px;font-size:.95rem}
+header nav a{color:var(--muted);text-decoration:none}
+header nav a:hover{color:var(--ink)}
+main{padding:56px 0 80px}
+.kicker{margin:0 0 14px;font:400 .78rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:500;font-size:clamp(2.2rem,6vw,3.4rem);line-height:1;letter-spacing:-0.05em;margin:0 0 18px}
+.lead{color:var(--muted);font-size:1.1rem;margin:0 0 40px;max-width:52ch}
+h2{display:flex;align-items:baseline;gap:12px;font-weight:500;font-size:1.6rem;letter-spacing:-0.035em;margin:56px 0 12px}
+h2 .n{font:400 .9rem var(--mono);color:var(--muted)}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+code{font:400 .9em var(--mono)}
+p code,li code{background:var(--surface);padding:1px 5px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--line)}
+pre{margin:0 0 18px;padding:18px 20px;border-radius:10px;background:var(--code-bg);color:var(--code-ink);font:400 .86rem/1.6 var(--mono);overflow-x:auto}
+pre .c{color:var(--code-muted)}
+pre .d{color:#FF8A75}
+pre .h{color:#F7B267}
+.file{display:block;margin:0 0 -6px;padding:8px 20px 14px;border-radius:10px 10px 0 0;background:var(--code-bg);color:var(--code-muted);font:400 .76rem var(--mono)}
+.file+pre{border-radius:0 0 10px 10px}
+.note{margin:18px 0;padding:14px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 8px 8px 0;font-size:.95rem}
+ul{padding-left:1.2em;margin:0 0 14px}
+li{margin:4px 0}
+footer{padding:28px 0 40px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+@media (max-width:560px){ header nav a:not(:last-child){display:none} main{padding:36px 0 56px} pre{font-size:.78rem;padding:14px} }
+.ph-badge{display:inline-block;line-height:0}.ph-badge img{max-width:100%;height:auto}
+</style>
+<style>.posts{list-style:none;padding:0;margin:0}.posts li{padding:22px 0;border-bottom:1px solid var(--line)}.posts a{color:var(--ink);font-size:1.3rem;font-weight:500;letter-spacing:-0.02em}.posts p{margin:6px 0 0;color:var(--muted)}.posts time,.byline{font:400 .82rem var(--mono);color:var(--muted)}article h2{display:block}article li{margin:6px 0}.cta-box{margin:48px 0 0;padding:20px 22px;border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}.cta-box p{margin:0}.cmp{width:100%;border-collapse:collapse;margin:8px 0 0;font-size:.95rem}.cmp th,.cmp td{text-align:left;vertical-align:top;padding:10px 12px 10px 0;border-bottom:1px solid var(--line)}.cmp th{font-weight:500}.cmp td:first-child{color:var(--muted)}.tbl{overflow-x:auto}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/" aria-label="Squidbrake home"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg>squidbrake</a>
+    <nav aria-label="Docs"><a href="/#how">How it works</a><a href="/security">Security</a><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
+  </header>
+
+  <main>
+    <p class="kicker">Blog</p>
+    <h1>Running AI agents without losing sleep.</h1>
+    <p class="lead">What goes wrong when agents get write access, and the controls that stop it. Built from real incidents.</p>
+    <ul class="posts">
+      <li><a href="/blog/ai-agent-deleted-production-database">How an AI agent deleted a prod database and how to stop it</a><p>Replit&#x27;s agent wiped a production database during a code freeze. What happened, why permissions didn&#x27;t catch it, and the controls that would have.</p><time datetime="2026-10-29">2026-10-29</time></li>
+      <li><a href="/blog/human-in-the-loop-approval-for-ai-agents">Human-in-the-loop approval for AI agents: what to ask about</a><p>Asking a person about every agent action fails, and so does asking about none. How to design approvals that catch the risky 1% without the fatigue.</p><time datetime="2026-10-29">2026-10-29</time></li>
+      <li><a href="/blog/mcp-security-checklist">MCP security checklist: 10 controls for AI agent tools</a><p>A practical checklist for running MCP servers with AI agents: tokens, untrusted content, config tampering, malicious servers, approvals and logging.</p><time datetime="2026-10-29">2026-10-29</time></li>
+      <li><a href="/blog/eu-ai-act-article-14-human-oversight-ai-agents">EU AI Act Article 14: human oversight for AI agents</a><p>What Article 14 of the EU AI Act asks for in human oversight of high-risk AI, what it means for AI agents that act, and how to produce the evidence.</p><time datetime="2026-10-29">2026-10-29</time></li>
+      <li><a href="/blog/squidbrake-vs-kontext">Squidbrake vs Kontext: AI agent control compared</a><p>Squidbrake and Kontext both check AI agent actions before they run. How they differ on human approval, open source, MCP, self-hosting and price.</p><time datetime="2026-10-29">2026-10-29</time></li>
+    </ul>
+  </main>
+
+
+  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="/">Home</a> ·  · <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></span></footer>
+</div>
+</body>
+</html>

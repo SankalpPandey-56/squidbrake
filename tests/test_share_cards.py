@@ -40,3 +40,15 @@ def test_cards_render_from_short_words_and_numbers_only(insights):  # noqa: F811
     assert insights.get("/week", params={"e": -1}).status_code == 422
     assert "14 of 15 harmful actions" in insights.get("/score", params={"n": 14, "of": 15}).text
     assert insights.get("/score", params={"n": 16, "of": 15}).status_code == 404
+
+
+def test_site_has_one_address_per_page_and_answers_head(insights):  # noqa: F811
+    r = insights.get("/docs.html", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/docs"
+    assert insights.get("/index.html", follow_redirects=False).headers["location"] == "/"
+    r = insights.head("/docs")
+    assert r.status_code == 200 and r.headers["x-content-type-options"] == "nosniff"
+    assert "frame-ancestors" in r.headers["content-security-policy"]
+    assert insights.get("/.well-known/security.txt").text.startswith("Contact:")
+    assert insights.get("/blog/mcp-security-checklist").status_code == 200
+    assert insights.get("/blog/nope").status_code == 404

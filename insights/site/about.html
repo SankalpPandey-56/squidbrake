@@ -3,13 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Squidbrake team</title>
-<meta name="description" content="The founders of Squidbrake, who backs us, and how to reach us.">
+<title>About Squidbrake: team, product and pilot case studies</title>
+<meta name="description" content="Who builds Squidbrake, what it does for AI agents, and what early pilots found: a red-team retest, a cloud console scare and ops agents at a data company.">
 <link rel="canonical" href="https://squidbrake.com/about">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://squidbrake.com/about">
+<meta property="og:site_name" content="Squidbrake">
+<meta property="og:title" content="About Squidbrake: team, product and pilot case studies">
+<meta property="og:description" content="Who builds Squidbrake, what it does for AI agents, and what early pilots found: a red-team retest, a cloud console scare and ops agents at a data company.">
+<meta property="og:image" content="https://squidbrake.com/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="About Squidbrake: team, product and pilot case studies">
+<meta name="twitter:description" content="Who builds Squidbrake, what it does for AI agents, and what early pilots found: a red-team retest, a cloud console scare and ops agents at a data company.">
+<meta name="twitter:image" content="https://squidbrake.com/assets/og.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "AboutPage", "name": "About Squidbrake", "url": "https://squidbrake.com/about", "mainEntity": {"@type": "Organization", "@id": "https://squidbrake.com/#org", "name": "Squidbrake", "url": "https://squidbrake.com/", "logo": "https://squidbrake.com/assets/logo-512.png", "email": "pulkit@squidbrake.com", "founder": [{"@id": "https://squidbrake.com/about#pulkit"}, {"@id": "https://squidbrake.com/about#karishma"}]}}, {"@type": "Person", "@id": "https://squidbrake.com/about#pulkit", "name": "Pulkit Batra", "jobTitle": "Cofounder", "worksFor": {"@id": "https://squidbrake.com/#org"}, "url": "https://squidbrake.com/about", "email": "pulkit@squidbrake.com", "sameAs": ["https://www.linkedin.com/in/pulkitbatra2077", "https://github.com/batrapulkit"], "knowsAbout": ["AI agent security", "Penetration testing", "Application security", "SOC 2", "OWASP LLM Top 10"], "alumniOf": [{"@type": "CollegeOrUniversity", "name": "University of Delhi"}, {"@type": "CollegeOrUniversity", "name": "Loyalist College"}]}, {"@type": "Person", "@id": "https://squidbrake.com/about#karishma", "name": "Karishma Sinha", "jobTitle": "Cofounder", "worksFor": {"@id": "https://squidbrake.com/#org"}, "url": "https://squidbrake.com/about", "sameAs": ["https://www.linkedin.com/in/karishma-sinha-7b46b8182/", "https://github.com/escher-m", "https://escher-m.github.io/"], "knowsAbout": ["Distributed systems", "Backend engineering", "AWS", "AI agents", "Go-to-market"], "alumniOf": [{"@type": "CollegeOrUniversity", "name": "IIIT Delhi"}]}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://squidbrake.com/"}, {"@type": "ListItem", "position": 2, "name": "About", "item": "https://squidbrake.com/about"}]}]}</script>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
 :root{
   --bg:#E6EBE2; --surface:#F4F6F1; --ink:#1E2A23; --muted:#56625A; --line:#C9D2C5;
@@ -75,28 +87,94 @@ dl.facts dd{margin:2px 0 0;color:var(--muted)}
 h2.plain{display:block;margin:44px 0 6px}
 @media (max-width:560px){ .rel{grid-template-columns:80px 1fr} .rel time{display:none} td:first-child{white-space:normal} }
 .ph-badge{display:inline-block;line-height:0}.ph-badge img{max-width:100%;height:auto}
+.founder{margin:8px 0 18px;padding:24px;border-radius:14px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}.founder-pitch{font-size:clamp(1.25rem,2.4vw,1.6rem);font-weight:500;letter-spacing:-0.025em;line-height:1.25;margin:0 0 20px;max-width:34ch}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 20px}.stats b{display:block;font-size:1.7rem;font-weight:500;letter-spacing:-0.04em}.stats span{display:block;font:400 .78rem var(--mono);color:var(--muted);line-height:1.35}.cv{padding-left:18px;margin:0 0 14px}.cv li{margin:0 0 10px}.founder .links{margin:0;font-size:.95rem}@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.founder{padding:18px 16px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <a class="brand" href="./" aria-label="Squidbrake home"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M16 30V21.5C16 12.4 23.2 5 32 5C40.8 5 48 12.4 48 21.5V30Z"/><g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M23 34V48.2C23 51.4 21.7 53.9 19.6 55.8"/><path d="M32 34V44.6"/><path d="M41 34V48.2C41 51.4 42.3 53.9 44.4 55.8"/></g><circle fill="currentColor" cx="32" cy="52.6" r="2.9"/><rect fill="#F2622E" x="11" y="24.5" width="42" height="11" rx="5.5"/><circle fill="#2FD574" cx="41.2" cy="30" r="2.5"/></svg>squidbrake</a>
-    <nav aria-label="Site"><a href="./#how">How it works</a><a href="docs">Docs</a><a href="security">Security</a><a href="pricing">Pricing</a><a href="about">Team</a><a href="changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
+    <nav aria-label="Site"><a href="./#how">How it works</a><a href="docs">Docs</a><a href="security">Security</a><a href="pricing">Pricing</a><a href="about">About</a><a href="changelog">Changelog</a><a href="/signup"><b>Sign up free</b></a></nav>
   </header>
 
   <main>
-    <p class="kicker">Team</p>
-    <h1>The people behind Squidbrake.</h1>
-    <p class="lead">We build the sign-off for what AI agents change: everyday work runs on its own, and a person approves
-      what can't be taken back.</p>
+    <p class="kicker">About</p>
+    <h1>Change control for AI agents, from people who've run security.</h1>
+    <p class="lead">Squidbrake lets AI agents do everyday work on their own and makes sure a person approves what can't be
+      taken back. Here's who builds it, what it does, and what we've learned from the teams piloting it.</p>
 
-    <h2 class="plain">Founders</h2>
+    <h2 class="plain">The product</h2>
     <dl class="facts">
-      <div><dt>Pulkit Batra, cofounder</dt><dd>His fourth company. He started the first, cybersecurity for small
-        businesses, at 19, and has spent 6+ years in cybersecurity across the systems agents now touch. Builds the
-        product.</dd></div>
-      <div><dt>Karishma Sinha, cofounder</dt><dd>Ex-Qualcomm. Ran her own startup with paying customers. Leads sales
-        and the teams we work with.</dd></div>
+      <div><dt>It checks every tool call before it runs</dt><dd>Squidbrake sits between your agents (Claude Code, Codex,
+        Cursor, Gemini CLI, MCP servers, your own code) and the tools they call. Each call is checked against your rules
+        in a few milliseconds, outside the model, so a prompt can't talk its way past it.</dd></div>
+      <div><dt>Routine work runs, irreversible work waits</dt><dd>Reads, builds and tests go through. Deletes, destructive
+        SQL, money going out and messages to the outside world wait for a teammate, who sees what will change and says yes
+        or no from the dashboard, Slack or their phone.</dd></div>
+      <div><dt>Every decision is on a record you can check</dt><dd>Who asked, what ran, which rule decided and who
+        approved, in a hash-chained log you can verify offline. Evidence for SOC 2 CC8.1 and EU AI Act Art. 14.</dd></div>
+      <div><dt>Open source, self-hosted or hosted</dt><dd>Apache-2.0, <code>pipx install squidbrake</code>. Start in
+        shadow mode: nothing is blocked in week one. <a href="/docs">Quickstart</a> · <a href="/benchmark">Benchmark</a> ·
+        <a href="/security">Security</a></dd></div>
+    </dl>
+
+    <h2 class="plain">From our pilots</h2>
+    <p>Early pilots, described without names until each team says yes to being named.</p>
+    <dl class="facts">
+      <div><dt>A security engineer tried to break it</dt><dd>He sent a list of commands meant to get around Squidbrake;
+        every one became a regression test. On the retest (version 0.14.11, isolated Docker, no network) all 30 test
+        cases and 28 follow-up probes were held or blocked, harmless ones ran, and the two gaps he'd found earlier
+        (piping a download into a shell, running a script the agent had just written) were closed. Next: a normal working
+        week, to measure how often it holds something it shouldn't.</dd></div>
+      <div><dt>An agent overstepped in a cloud console</dt><dd>A founder in the Entrepreneur First cohort watched an AI
+        agent take actions in his Google Cloud console that he hadn't asked for. He found Squidbrake and installed it
+        himself, without a call, then sent us a review of where it fell short. Those findings are now on our list.</dd></div>
+      <div><dt>Unattended agents on private repos and AWS</dt><dd>An engineer at a large IT services firm runs local models
+        and Claude Code unattended against private repositories and AWS. He read the install script before running it;
+        we set it up together in a 65-minute call and his first agent action went through Squidbrake. His asks (connect
+        one agent at a time, an extra warning before approving anything irreversible) shaped what we're building next.</dd></div>
+      <div><dt>Ops agents at a data-integration company</dt><dd>Their agents had put a customer's name in a pull request
+        and commented on a public issue after being told not to. They already had Slack approve and reject buttons, so the
+        gap was what's inside an action: customer names in public text, public comments, sequences of version changes.
+        Their tools go behind Squidbrake in shadow mode first, logging what would have been held before anything is.</dd></div>
+    </dl>
+
+    <h2 class="plain">The team</h2>
+    <div class="founder">
+      <p class="kicker" style="margin:0 0 6px">Pulkit Batra · cofounder, builds the product</p>
+      <p class="founder-pitch">He's been the attacker, the defender and the person who has to pass the audit. Squidbrake is
+        what he wished existed in all three jobs.</p>
+      <div class="stats">
+        <div><b>Top 2,000</b><span>ethical hackers on Bugcrowd</span></div>
+        <div><b>3 of 3</b><span>enterprise security reviews passed with zero findings</span></div>
+        <div><b>1,000+</b><span>students trained in ethical hacking</span></div>
+        <div><b>4th</b><span>company, the first started at 19</span></div>
+      </div>
+      <ul class="cv">
+        <li><strong>Broke into systems for a living.</strong> Founded SecurityElla at 19 and ran penetration tests and
+          vulnerability assessments for businesses. Certified Ethical Hacker (European Open University), Certified AppSec Practitioner, and a course reviewer
+          for EC-Council.</li>
+        <li><strong>Shipped AI that handles money and personal data, alone.</strong> As the sole engineer, built Triponic's
+          AI travel platform end to end: passenger PII and payments for about 12 travel agencies, and SOC 2 and ISO
+          27001-aligned security reviews at three enterprise onboardings, passed without a single remediation item.</li>
+        <li><strong>Secured AI before it was a category.</strong> Wrote a production AI risk register covering the full
+          OWASP LLM Top 10 for systems handling personal data; it drove four governance policy changes. Ran SOC triage in
+          Splunk and Microsoft Sentinel, and today assesses client cloud environments as a cybersecurity engineer.</li>
+        <li><strong>Teaches it.</strong> Taught cybersecurity and ethical hacking at Hansraj College, University of Delhi;
+          ran the cybersecurity club as Club Master at Loyalist College in Canada; guest lecturer at IIT Kanpur. Published
+          in a newspaper, invited speaker, Best Young Entrepreneur nominee.</li>
+      </ul>
+      <p class="links"><a href="https://www.linkedin.com/in/pulkitbatra2077" target="_blank" rel="noopener">LinkedIn</a> ·
+        <a href="https://github.com/batrapulkit" target="_blank" rel="noopener">GitHub</a> ·
+        <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></p>
+    </div>
+    <dl class="facts">
+      <div><dt>Karishma Sinha, cofounder</dt><dd>Ex-Qualcomm, where she ran backend systems for 300k+ users and
+        automated license updates for 1M+ licenses across 4,000+ companies. Founded DropStop, an AI product-research
+        tool for Indian sellers, and took it to paying customers without funding. Computer science at IIIT Delhi, with
+        published research on social networks. Leads sales and the teams we work with, and writes code too.
+        <a href="https://github.com/escher-m" target="_blank" rel="noopener">GitHub</a> ·
+        <a href="https://www.linkedin.com/in/karishma-sinha-7b46b8182/" target="_blank" rel="noopener">LinkedIn</a></dd></div>
     </dl>
 
     <h2 class="plain">Backed by</h2>
@@ -108,10 +186,10 @@ h2.plain{display:block;margin:44px 0 6px}
 
     <h2 class="plain">Talk to us</h2>
     <p class="lead" style="margin-bottom:0"><a href="https://calendly.com/pulkitbatra2024/new-meeting-1" target="_blank"
-      rel="noopener">Book a call</a> or write to <a href="mailto:hello@squidbrake.com">hello@squidbrake.com</a>.</p>
+      rel="noopener">Book a call</a> or write to <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a>.</p>
   </main>
 
-  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="./">Home</a> · <a href="docs">Docs</a> · <a href="security">Security</a> · <a href="pricing">Pricing</a><a href="about">Team</a> · <a href="changelog">Changelog</a> ·  · <a href="mailto:hello@squidbrake.com">hello@squidbrake.com</a></span></footer>
+  <footer><span>© 2026 Squidbrake, Inc.</span><a class="ph-badge" href="https://www.producthunt.com/products/squidbrake?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-squidbrake" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=dark&amp;t=1791704247916"><img alt="Squidbrake - Change control for AI agents: sign-off, undo and a record | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1275992&amp;theme=light&amp;t=1791704247916"></picture></a><span><a href="./">Home</a> · <a href="docs">Docs</a> · <a href="security">Security</a> · <a href="pricing">Pricing</a><a href="about">About</a> · <a href="changelog">Changelog</a> ·  · <a href="mailto:pulkit@squidbrake.com">pulkit@squidbrake.com</a></span></footer>
 </div>
 <script src="assets/booking.js" defer></script>
 </body>
